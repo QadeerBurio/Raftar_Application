@@ -48,6 +48,7 @@ const Drivers = () => {
   const [dialogType, setDialogType] = useState('');
   
   const [statusFilter, setStatusFilter] = useState('all');
+  const [vehicleFilter, setVehicleFilter] = useState('all');
   const [fullscreenImage, setFullscreenImage] = useState(null);
   
   const [rejectDialog, setRejectDialog] = useState(null);
@@ -56,13 +57,14 @@ const Drivers = () => {
 
   useEffect(() => {
     fetchDrivers();
-  }, [page, rowsPerPage, statusFilter]);
+  }, [page, rowsPerPage, statusFilter, vehicleFilter]);
 
   const fetchDrivers = async () => {
     try {
       setLoading(true);
       const params = { page: page + 1, limit: rowsPerPage };
       if (statusFilter !== 'all') params.status = statusFilter;
+      if (vehicleFilter !== 'all') params.vehicleType = vehicleFilter;
       const response = await api.get('/admin/drivers', { params });
       
       console.log(`API URL: /admin/drivers, Params:`, params);
@@ -182,13 +184,27 @@ const Drivers = () => {
       <Tabs 
         value={statusFilter} 
         onChange={(e, v) => { setStatusFilter(v); setPage(0); }} 
-        sx={{ mb: 3, borderBottom: 1, borderColor: '#333' }}
+        sx={{ mb: 2, borderBottom: 1, borderColor: '#333' }}
         TabIndicatorProps={{ style: { backgroundColor: '#FFD700' } }}
       >
-        <Tab value="all" label="All Drivers" sx={{ color: statusFilter === 'all' ? '#FFD700' : '#888' }} />
+        <Tab value="all" label="All Statuses" sx={{ color: statusFilter === 'all' ? '#FFD700' : '#888' }} />
         <Tab value="pending" label="Pending Verification" sx={{ color: statusFilter === 'pending' ? '#FFD700' : '#888' }} />
         <Tab value="approved" label="Approved" sx={{ color: statusFilter === 'approved' ? '#FFD700' : '#888' }} />
         <Tab value="rejected" label="Rejected" sx={{ color: statusFilter === 'rejected' ? '#FFD700' : '#888' }} />
+      </Tabs>
+
+      <Tabs 
+        value={vehicleFilter} 
+        onChange={(e, v) => { setVehicleFilter(v); setPage(0); }} 
+        sx={{ mb: 3, borderBottom: 1, borderColor: '#333' }}
+        TabIndicatorProps={{ style: { backgroundColor: '#4ECDC4' } }}
+      >
+        <Tab value="all" label="Total Drivers" sx={{ color: vehicleFilter === 'all' ? '#4ECDC4' : '#888' }} />
+        <Tab value="car" label="Car Drivers" sx={{ color: vehicleFilter === 'car' ? '#4ECDC4' : '#888' }} />
+        <Tab value="bike" label="Bike Drivers" sx={{ color: vehicleFilter === 'bike' ? '#4ECDC4' : '#888' }} />
+        <Tab value="rickshaw" label="Rickshaw Drivers" sx={{ color: vehicleFilter === 'rickshaw' ? '#4ECDC4' : '#888' }} />
+        <Tab value="ac_car" label="AC Car Drivers" sx={{ color: vehicleFilter === 'ac_car' ? '#4ECDC4' : '#888' }} />
+        <Tab value="luxury_car" label="Luxury Car" sx={{ color: vehicleFilter === 'luxury_car' ? '#4ECDC4' : '#888' }} />
       </Tabs>
 
       <TableContainer component={Paper} sx={{ backgroundColor: '#1E1E1E' }}>

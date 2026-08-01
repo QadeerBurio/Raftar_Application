@@ -339,6 +339,7 @@ exports.getDrivers = async (req, res) => {
 
     const query = {};
     if (status && status !== 'all') query.status = status;
+    if (req.query.vehicleType && req.query.vehicleType !== 'all') query['vehicleDetails.type'] = req.query.vehicleType;
     if (search) {
       const userIds = await User.find({
         $or: [

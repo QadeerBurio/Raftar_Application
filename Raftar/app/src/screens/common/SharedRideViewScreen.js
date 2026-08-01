@@ -15,6 +15,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { API_URL, GOOGLE_MAPS_API_KEY } from '../../config/constants';
+import { getDirections } from '../../services/maps';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,7 @@ const SharedRideViewScreen = () => {
   const [driverLocation, setDriverLocation] = useState(null);
   const [passengerLocation, setPassengerLocation] = useState(null);
   const [routeCoords, setRouteCoords] = useState([]);
+  const [routeInfo, setRouteInfo] = useState(null);
   
   const socketRef = useRef(null);
 
@@ -109,33 +111,18 @@ const SharedRideViewScreen = () => {
     }
   };
 
-  const decodePolyline = (t, e) => {
-    for (var n, o, u = 0, l = 0, r = 0, d = [], h = 0, i = 0, a = null, c = Math.pow(10, e || 5); u < t.length; ) {
-      a = null, h = 0, i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      n = 1 & i ? ~(i >> 1) : i >> 1, h = i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      o = 1 & i ? ~(i >> 1) : i >> 1, l += n, r += o, d.push([l / c, r / c]);
-    }
-    return d.map(p => ({ latitude: p[0], longitude: p[1] }));
-  };
-
   const fetchRoute = async () => {
-    if (!ride?.pickup?.location?.coordinates || !ride?.dropoff?.location?.coordinates || !GOOGLE_MAPS_API_KEY) return;
-    
-    const [startLng, startLat] = ride.pickup.location.coordinates;
-    const [endLng, endLat] = ride.dropoff.location.coordinates;
+    if (!ride?.pickup?.location?.coordinates || !ride?.dropoff?.location?.coordinates) return;
 
-    try {
-      const resp = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&key=${GOOGLE_MAPS_API_KEY}`);
-      const respJson = await resp.json();
-      if (respJson.routes?.length) {
-        const points = decodePolyline(respJson.routes[0].overview_polyline.points);
-        setRouteCoords(points);
-      }
-    } catch (err) {
-      console.log('Error fetching directions:', err);
-    }
+    const route = await getDirections(ride.pickup, ride.dropoff, ride.waypoints || []);
+    if (!route) return;
+
+    setRouteCoords(route.coordinates);
+    setRouteInfo({
+      distanceText: route.distanceText,
+      durationText: route.durationText,
+      isEstimate: route.isFallback,
+    });
   };
 
   if (loading) {
@@ -253,6 +240,15 @@ const SharedRideViewScreen = () => {
             <Icon name="flag" size={20} color="#FF6B6B" />
             <Text style={styles.detailText} numberOfLines={1}>{ride.dropoff?.address}</Text>
           </View>
+          {routeInfo && (
+            <View style={styles.detailRow}>
+              <Icon name="schedule" size={20} color={colors.textSecondary} />
+              <Text style={styles.detailText} numberOfLines={1}>
+                {`${routeInfo.durationText} · ${routeInfo.distanceText}`}
+                {routeInfo.isEstimate ? ' (approx.)' : ''}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     </SafeAreaView>

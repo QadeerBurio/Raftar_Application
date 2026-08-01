@@ -12,7 +12,7 @@ class SocketService {
       this.disconnect();
     }
 
-    this.socket = io(SOCKET_URL || 'http://192.168.18.125:5000', {
+    this.socket = io(SOCKET_URL || 'http://192.168.100.27:5000', {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,

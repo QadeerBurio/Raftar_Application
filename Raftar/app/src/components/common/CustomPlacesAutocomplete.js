@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import {
   View,
   TextInput,
-  FlatList,
+  ScrollView,
   Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator
 } from 'react-native';
-import { GOOGLE_MAPS_API_KEY } from '../../config/constants';
+import { autocompletePlaces, getPlaceDetails } from '../../services/maps';
 
 const CustomPlacesAutocomplete = forwardRef(({ 
   placeholder, 
@@ -22,6 +22,7 @@ const CustomPlacesAutocomplete = forwardRef(({
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const debounceTimeout = useRef(null);
+  const latestQuery = useRef('');
 
   useImperativeHandle(ref, () => ({
     setAddressText: (text) => {
@@ -30,6 +31,7 @@ const CustomPlacesAutocomplete = forwardRef(({
   }));
 
   const fetchPredictions = async (text) => {
+    latestQuery.current = text;
     if (!text.trim()) {
       setPredictions([]);
       setShowDropdown(false);
@@ -38,25 +40,27 @@ const CustomPlacesAutocomplete = forwardRef(({
 
     setLoading(true);
     try {
-      const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${GOOGLE_MAPS_API_KEY}&components=country:pk`, {
-        method: 'GET'
-      });
+      // Handles legacy-vs-new Places API selection and logs the real Google
+      // error (disabled API, key restriction, billing) when it fails.
+      const results = await autocompletePlaces(text);
 
-      const data = await response.json();
-      if (data.status === 'OK' && data.predictions) {
-        setPredictions(data.predictions);
-        setShowDropdown(true);
-      } else if (data.status !== 'ZERO_RESULTS') {
-        console.error('Places API Autocomplete Error:', data.error_message || data.status);
-        setPredictions([]);
-      } else {
-        setPredictions([]);
-      }
+      // A slower earlier keystroke must not overwrite newer results.
+      if (latestQuery.current !== text) return;
+
+      setPredictions(
+        results.map(p => ({
+          place_id: p.placeId,
+          description: p.description,
+          primaryText: p.primaryText,
+          secondaryText: p.secondaryText,
+        }))
+      );
+      setShowDropdown(results.length > 0);
     } catch (error) {
-      console.error('Error fetching autocomplete:', error);
+      console.error('[Autocomplete] Unexpected error:', error);
       setPredictions([]);
     } finally {
-      setLoading(false);
+      if (latestQuery.current === text) setLoading(false);
     }
   };
 
@@ -76,33 +80,30 @@ const CustomPlacesAutocomplete = forwardRef(({
     setPredictions([]);
     
     try {
-      const response = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&key=${GOOGLE_MAPS_API_KEY}`, {
-        method: 'GET'
-      });
-      
-      const placeDetails = await response.json();
-      
-      if (placeDetails.status === 'OK' && placeDetails.result) {
-        const result = {
-          description: placeDetails.result.formatted_address || prediction.description,
-          place_id: placeDetails.result.place_id || prediction.place_id
-        };
-        
-        const details = {
-          geometry: {
-            location: {
-              lat: placeDetails.result.geometry?.location?.lat,
-              lng: placeDetails.result.geometry?.location?.lng
-            }
+      const placeDetails = await getPlaceDetails(prediction.place_id);
+
+      if (placeDetails?.location?.lat != null) {
+        const address = placeDetails.address || prediction.description;
+        setQuery(address);
+
+        onPress(
+          { description: address, place_id: placeDetails.placeId },
+          {
+            // Legacy shape kept so every existing caller keeps working.
+            geometry: {
+              location: {
+                lat: placeDetails.location.lat,
+                lng: placeDetails.location.lng,
+              },
+            },
           }
-        };
-        
-        onPress(result, details);
+        );
       } else {
-        console.error('Places API Details Error:', placeDetails.error_message || placeDetails.status);
+        // Details unavailable — the maps service has already logged why.
+        console.warn('[Autocomplete] No coordinates for the selected place; selection ignored.');
       }
     } catch (error) {
-      console.error('Error fetching place details:', error);
+      console.error('[Autocomplete] Error fetching place details:', error);
     }
   };
 
@@ -122,11 +123,10 @@ const CustomPlacesAutocomplete = forwardRef(({
       
       {showDropdown && predictions.length > 0 && (
         <View style={[styles.dropdown, customStyles?.listView]}>
-          <FlatList
-            data={predictions}
-            keyExtractor={(item) => item.place_id}
-            renderItem={({ item }) => (
+          <ScrollView keyboardShouldPersistTaps="handled">
+            {predictions.map((item) => (
               <TouchableOpacity 
+                key={item.place_id}
                 style={[styles.predictionRow, customStyles?.row]}
                 onPress={() => handleSelectPrediction(item)}
               >
@@ -134,9 +134,8 @@ const CustomPlacesAutocomplete = forwardRef(({
                   {item.description}
                 </Text>
               </TouchableOpacity>
-            )}
-            keyboardShouldPersistTaps="handled"
-          />
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>

@@ -71,8 +71,62 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const response = await api.get('/admin/dashboard');
-      setStats(response.data.stats);
-      setChartData(response.data.charts);
+      const data = response.data.stats || {};
+      
+      setStats({
+        totalUsers: data.users?.total || 0,
+        totalDrivers: data.drivers?.total || 0,
+        totalEarnings: data.revenue?.total || 0,
+        activeRides: data.rides?.active || 0,
+        newUsers: data.users?.newToday || 0,
+        pendingDrivers: data.drivers?.pending || 0,
+        totalTrips: data.rides?.total || 0,
+        cancellationRate: 0,
+        averageRating: data.averageRating || 0,
+      });
+
+      // Safely build chart data
+      const byType = data.revenue?.byType || [];
+      const rideTypesData = {
+        labels: byType.map(t => t._id || 'Unknown'),
+        datasets: [{
+          data: byType.map(t => t.count || 0),
+          backgroundColor: ['#FF6B6B', '#4ECDC4', '#FFD700', '#A29BFE', '#FD79A8'],
+        }]
+      };
+
+      const heatmap = data.heatmap || [];
+      const hourlyCounts = new Array(24).fill(0);
+      heatmap.forEach(h => {
+        if (h._id && h._id.hour !== undefined) {
+          hourlyCounts[h._id.hour] += h.count;
+        }
+      });
+      const hoursData = {
+        labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+        datasets: [{
+          label: 'Rides by Hour',
+          data: hourlyCounts,
+          backgroundColor: '#4ECDC4',
+        }]
+      };
+
+      const earningsData = {
+        labels: ['Current Total'],
+        datasets: [{
+          label: 'Earnings',
+          data: [data.revenue?.total || 0],
+          borderColor: '#FFD700',
+          tension: 0.4
+        }]
+      };
+
+      setChartData({
+        earningsData,
+        rideTypesData,
+        hoursData
+      });
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

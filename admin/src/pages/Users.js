@@ -69,7 +69,8 @@ const Users = () => {
         params: {
           page: page + 1,
           limit: rowsPerPage,
-          search: search || undefined
+          search: search || undefined,
+          role: 'passenger'
         }
       });
       if (response.data.success) {
@@ -124,7 +125,7 @@ const Users = () => {
     <Box sx={{ flexGrow: 1, p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" sx={{ color: '#FFD700' }}>
-          Users Management
+          Passengers Management
         </Typography>
         <Button 
           variant="contained" 
@@ -161,9 +162,8 @@ const Users = () => {
           <Table sx={{ minWidth: 750 }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ color: '#888' }}>User</TableCell>
+                <TableCell sx={{ color: '#888' }}>Passenger</TableCell>
                 <TableCell sx={{ color: '#888' }}>Contact Info</TableCell>
-                <TableCell sx={{ color: '#888' }}>Role</TableCell>
                 <TableCell sx={{ color: '#888' }}>Statistics</TableCell>
                 <TableCell sx={{ color: '#888' }}>Status</TableCell>
                 <TableCell sx={{ color: '#888' }} align="right">Actions</TableCell>
@@ -183,17 +183,6 @@ const Users = () => {
                   <TableCell>
                     <Typography variant="body2" sx={{ color: '#FFF' }}>{row.phoneNumber || 'N/A'}</Typography>
                     <Typography variant="caption" sx={{ color: '#888' }}>{row.email || 'No email'}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={row.role || 'passenger'} 
-                      size="small"
-                      sx={{ 
-                        backgroundColor: row.role === 'driver' ? '#4ECDC4' : '#A29BFE', 
-                        color: '#000',
-                        fontWeight: 'bold'
-                      }} 
-                    />
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>

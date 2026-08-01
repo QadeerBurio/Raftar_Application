@@ -35,6 +35,7 @@ import { createRide } from '../../redux/slices/rideSlice';
 import { VEHICLE_TYPES } from '../../utils/constants';
 import api from '../../services/api';
 import { GOOGLE_MAPS_API_KEY } from '../../config/constants';
+import { getDirections } from '../../services/maps';
 
 const { width, height } = Dimensions.get('window');
 
@@ -68,6 +69,7 @@ const BookRideScreen = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const mapRef = useRef(null);
   const [routeCoords, setRouteCoords] = useState([]);
+  const [routeInfo, setRouteInfo] = useState(null);
   
   const pickupRef = useRef(null);
   const dropoffRef = useRef(null);
@@ -203,53 +205,29 @@ const BookRideScreen = () => {
     setMapPickerVisible(false);
   };
 
-  const decodePolyline = (t, e) => {
-    for (var n, o, u = 0, l = 0, r = 0, d = [], h = 0, i = 0, a = null, c = Math.pow(10, e || 5); u < t.length; ) {
-      a = null, h = 0, i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      n = 1 & i ? ~(i >> 1) : i >> 1, h = i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      o = 1 & i ? ~(i >> 1) : i >> 1, l += n, r += o, d.push([l / c, r / c]);
-    }
-    return d.map(p => ({ latitude: p[0], longitude: p[1] }));
-  };
-
   const fetchRoute = async () => {
-    if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates || !GOOGLE_MAPS_API_KEY) return;
-    
-    const [startLng, startLat] = pickup.location.coordinates;
-    const [endLng, endLat] = dropoff.location.coordinates;
-    
-    let waypointsParam = '';
-    if (stops.length > 0) {
-      waypointsParam = `&waypoints=${stops.map(s => `${s.location.coordinates[1]},${s.location.coordinates[0]}`).join('|')}`;
-    }
+    if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates) return;
 
-    try {
-      const resp = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}`);
-      const respJson = await resp.json();
-      if (respJson.routes.length) {
-        const points = decodePolyline(respJson.routes[0].overview_polyline.points);
-        setRouteCoords(points);
-        
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates(points, {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          });
-        }
-      } else {
-        setRouteCoords([
-          { latitude: startLat, longitude: startLng },
-          { latitude: endLat, longitude: endLng }
-        ]);
-      }
-    } catch (error) {
-      console.log('Error fetching directions:', error);
-      setRouteCoords([
-        { latitude: startLat, longitude: startLng },
-        { latitude: endLat, longitude: endLng }
-      ]);
+    // getDirections picks the fastest of Google's alternative routes, decodes the
+    // road polyline, and always resolves (falling back to a flagged straight-line
+    // estimate) so the map and the ETA are never left blank.
+    const route = await getDirections(pickup, dropoff, stops);
+    if (!route) return;
+
+    setRouteCoords(route.coordinates);
+    setRouteInfo({
+      distanceText: route.distanceText,
+      durationText: route.durationText,
+      distanceKm: route.distanceKm,
+      durationMin: route.durationMin,
+      isEstimate: route.isFallback,
+    });
+
+    if (mapRef.current && route.coordinates.length) {
+      mapRef.current.fitToCoordinates(route.coordinates, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
     }
   };
 
@@ -602,6 +580,24 @@ const BookRideScreen = () => {
                     />
                   )}
                 </MapView>
+              )}
+
+              {/* Trip ETA + distance, parsed from the Directions response */}
+              {routeInfo && (
+                <View style={styles.etaBar}>
+                  <View style={styles.etaItem}>
+                    <Icon name="schedule" size={16} color={colors.textSecondary} />
+                    <Text style={styles.etaValue}>{routeInfo.durationText}</Text>
+                  </View>
+                  <View style={styles.etaDivider} />
+                  <View style={styles.etaItem}>
+                    <Icon name="straighten" size={16} color={colors.textSecondary} />
+                    <Text style={styles.etaValue}>{routeInfo.distanceText}</Text>
+                  </View>
+                  {routeInfo.isEstimate && (
+                    <Text style={styles.etaApprox}>approx.</Text>
+                  )}
+                </View>
               )}
             </Animatable.View>
 
@@ -1063,6 +1059,41 @@ const createStyles = (colors, isDark) => StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.card,
     position: 'relative',
+  },
+  etaBar: {
+    position: 'absolute',
+    bottom: 12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    elevation: 4,
+  },
+  etaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  etaValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  etaDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 16,
+    marginHorizontal: 12,
+    backgroundColor: colors.border,
+  },
+  etaApprox: {
+    marginLeft: 8,
+    fontSize: 11,
+    color: colors.textSecondary,
   },
   mapLoading: {
     flex: 1,

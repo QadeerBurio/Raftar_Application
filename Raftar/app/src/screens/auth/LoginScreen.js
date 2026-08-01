@@ -18,6 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 // FIX: Import the login action
 import { login } from '../../redux/slices/authSlice'; // Adjust the path as needed
+import { useTheme } from '../../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,6 +26,18 @@ const LoginScreen = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const { loading } = useSelector(state => state.auth);
+  const { isDark } = useTheme();
+
+  const palette = React.useMemo(() => ({
+    bg: isDark ? '#0F0F0F' : '#FFFFFF',
+    cards: isDark ? '#1A1A1A' : '#F5F5F5',
+    text: isDark ? '#FFFFFF' : '#111111',
+    secondary: isDark ? '#8A8A8A' : '#6A6A6A',
+    accent: '#FFC107',
+    border: isDark ? '#333333' : '#F0F0F0',
+  }), [isDark]);
+
+  const styles = React.useMemo(() => createStyles(palette), [palette]);
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -139,12 +152,12 @@ const LoginScreen = () => {
               {/* Phone Input */}
               <View style={styles.inputContainer}>
                 <View style={styles.inputIcon}>
-                  <Icon name="phone" size={22} color="#666" />
+                  <Icon name="phone" size={22} color={palette.secondary} />
                 </View>
                 <TextInput
                   style={styles.input}
                   placeholder="Phone Number"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={palette.secondary}
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
                   keyboardType="phone-pad"
@@ -155,7 +168,7 @@ const LoginScreen = () => {
                     onPress={() => setPhoneNumber('')}
                     style={styles.clearButton}
                   >
-                    <Icon name="close" size={18} color="#999" />
+                    <Icon name="close" size={18} color={palette.secondary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -166,12 +179,12 @@ const LoginScreen = () => {
               {/* Password Input */}
               <View style={styles.inputContainer}>
                 <View style={styles.inputIcon}>
-                  <Icon name="lock" size={22} color="#666" />
+                  <Icon name="lock" size={22} color={palette.secondary} />
                 </View>
                 <TextInput
                   style={styles.input}
                   placeholder="Password"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={palette.secondary}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -183,7 +196,7 @@ const LoginScreen = () => {
                   <Icon
                     name={showPassword ? 'visibility' : 'visibility-off'}
                     size={20}
-                    color="#999"
+                    color={palette.secondary}
                   />
                 </TouchableOpacity>
               </View>
@@ -228,13 +241,13 @@ const LoginScreen = () => {
                 onPress={handleOTPLogin}
                 activeOpacity={0.7}
               >
-                <Icon name="security" size={22} color="#F9C349" />
+                <Icon name="security" size={22} color={palette.accent} />
                 <Text style={styles.otpButtonText}>Login with OTP</Text>
               </TouchableOpacity>
 
               {/* Register Link */}
               <View style={styles.registerContainer}>
-                <Text style={styles.registerText}>Don't have an account? </Text>
+                <Text style={styles.registerText}>Don&apos;t have an account? </Text>
                 <TouchableOpacity onPress={() => navigation.navigate('Register')}>
                   <Text style={styles.registerLink}>Sign Up</Text>
                 </TouchableOpacity>
@@ -249,14 +262,14 @@ const LoginScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.bg,
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.bg,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -278,13 +291,13 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 50,
     fontWeight: '800',
-    color: '#F9C349',
+    color: palette.accent,
     letterSpacing: 1.5,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   subtitle: {
     fontSize: 16,
-    color: '#888',
+    color: palette.secondary,
     marginTop: 6,
     letterSpacing: 1,
     fontWeight: '500',
@@ -298,24 +311,24 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#000000',
+    color: palette.text,
     marginBottom: 6,
   },
   welcomeSubtext: {
     fontSize: 15,
-    color: '#888',
+    color: palette.secondary,
     marginBottom: 30,
     fontWeight: '400',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: palette.cards,
     borderRadius: 14,
     marginBottom: 6,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: palette.border,
     height: 56,
   },
   inputIcon: {
@@ -324,7 +337,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#000000',
+    color: palette.text,
     height: '100%',
     fontWeight: '400',
   },
@@ -347,12 +360,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: '#F9C349',
+    color: palette.accent,
     fontSize: 14,
     fontWeight: '600',
   },
   loginButton: {
-    backgroundColor: '#000000',
+    backgroundColor: palette.text,
     borderRadius: 14,
     height: 56,
     justifyContent: 'center',
@@ -364,7 +377,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   loginButtonText: {
-    color: '#FFFFFF',
+    color: palette.bg,
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -378,8 +391,8 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
-    borderTopColor: '#F9C349',
+    borderColor: palette.bg,
+    borderTopColor: palette.accent,
     borderRadius: 10,
     marginRight: 10,
     ...Platform.select({
@@ -396,10 +409,10 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: palette.border,
   },
   dividerText: {
-    color: '#999',
+    color: palette.secondary,
     paddingHorizontal: 16,
     fontSize: 13,
     fontWeight: '500',
@@ -408,15 +421,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF8E8',
+    backgroundColor: palette.cards,
     borderRadius: 14,
     height: 56,
     borderWidth: 1.5,
-    borderColor: '#F9C349',
+    borderColor: palette.accent,
     gap: 10,
   },
   otpButtonText: {
-    color: '#000000',
+    color: palette.text,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -426,11 +439,11 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   registerText: {
-    color: '#888',
+    color: palette.secondary,
     fontSize: 15,
   },
   registerLink: {
-    color: '#F9C349',
+    color: palette.accent,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -439,7 +452,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   socialLoginText: {
-    color: '#999',
+    color: palette.secondary,
     fontSize: 13,
     marginBottom: 16,
     fontWeight: '400',
@@ -453,11 +466,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: palette.cards,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderColor: palette.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -465,7 +478,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   version: {
-    color: '#C0C0C0',
+    color: palette.secondary,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 20,

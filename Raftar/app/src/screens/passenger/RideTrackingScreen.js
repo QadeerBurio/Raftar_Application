@@ -22,6 +22,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { getRideDetails, cancelRide, sendChatMessage, acceptCounterOffer } from '../../redux/slices/rideSlice';
 import { useSocket } from '../../context/SocketContext';
 import { GOOGLE_MAPS_API_KEY, VOIP_CALLING_ENABLED, API_URL } from '../../config/constants';
+import { getDirections } from '../../services/maps';
 import RatingComponent from '../../components/common/RatingComponent';
 import CallService from '../../services/CallService';
 import api from '../../services/api';
@@ -46,7 +47,9 @@ const RideTrackingScreen = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [sosTriggered, setSosTriggered] = useState(false);
   const [counterOffers, setCounterOffers] = useState([]);
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const [routeCoords, setRouteCoords] = useState([]);
+  const [routeInfo, setRouteInfo] = useState(null);
   const [rideCompletedData, setRideCompletedData] = useState(null);
   const mapRef = useRef(null);
   
@@ -203,66 +206,28 @@ const RideTrackingScreen = () => {
     }
   };
 
-  const decodePolyline = (t, e) => {
-    for (var n, o, u = 0, l = 0, r = 0, d = [], h = 0, i = 0, a = null, c = Math.pow(10, e || 5); u < t.length; ) {
-      a = null, h = 0, i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      n = 1 & i ? ~(i >> 1) : i >> 1, h = i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      o = 1 & i ? ~(i >> 1) : i >> 1, l += n, r += o, d.push([l / c, r / c]);
-    }
-    return d.map(p => ({ latitude: p[0], longitude: p[1] }));
-  };
-
   const fetchRoute = async () => {
-    if (!currentRide?.pickup?.location?.coordinates || !currentRide?.dropoff?.location?.coordinates || !GOOGLE_MAPS_API_KEY) return;
-    
-    const [startLng, startLat] = currentRide.pickup.location.coordinates;
-    const [endLng, endLat] = currentRide.dropoff.location.coordinates;
+    if (!currentRide?.pickup?.location?.coordinates || !currentRide?.dropoff?.location?.coordinates) return;
 
-    let waypointsParam = '';
-    if (currentRide.waypoints && currentRide.waypoints.length > 0) {
-      waypointsParam = `&waypoints=${currentRide.waypoints.map(w => `${w.location.coordinates[1]},${w.location.coordinates[0]}`).join('|')}`;
-    }
+    const route = await getDirections(
+      currentRide.pickup,
+      currentRide.dropoff,
+      currentRide.waypoints || []
+    );
+    if (!route) return;
 
-    try {
-      const resp = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}`);
-      const respJson = await resp.json();
-      if (respJson.routes?.length) {
-        const points = decodePolyline(respJson.routes[0].overview_polyline.points);
-        setRouteCoords(points);
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates(points, {
-            edgePadding: { top: 80, right: 50, bottom: 400, left: 50 },
-            animated: true,
-          });
-        }
-      } else {
-        const fallbackPoints = [
-          { latitude: startLat, longitude: startLng },
-          { latitude: endLat, longitude: endLng }
-        ];
-        setRouteCoords(fallbackPoints);
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates(fallbackPoints, {
-            edgePadding: { top: 80, right: 50, bottom: 400, left: 50 },
-            animated: true,
-          });
-        }
-      }
-    } catch (error) {
-      console.log('Error fetching directions:', error);
-      const fallbackPoints = [
-        { latitude: startLat, longitude: startLng },
-        { latitude: endLat, longitude: endLng }
-      ];
-      setRouteCoords(fallbackPoints);
-      if (mapRef.current) {
-        mapRef.current.fitToCoordinates(fallbackPoints, {
-          edgePadding: { top: 80, right: 50, bottom: 400, left: 50 },
-          animated: true,
-        });
-      }
+    setRouteCoords(route.coordinates);
+    setRouteInfo({
+      distanceText: route.distanceText,
+      durationText: route.durationText,
+      isEstimate: route.isFallback,
+    });
+
+    if (mapRef.current && route.coordinates.length) {
+      mapRef.current.fitToCoordinates(route.coordinates, {
+        edgePadding: { top: 80, right: 50, bottom: 400, left: 50 },
+        animated: true,
+      });
     }
   };
 
@@ -331,6 +296,12 @@ const RideTrackingScreen = () => {
       }
     };
 
+    const handleNearbyDrivers = (data) => {
+      if (data.drivers && Array.isArray(data.drivers)) {
+        setNearbyDrivers(data.drivers);
+      }
+    };
+
     socket.on('driver-location', handleDriverLocation);
     socket.on('new-message', handleNewMessage);
     socket.on('ride-completed', handleRideCompleted);
@@ -338,6 +309,7 @@ const RideTrackingScreen = () => {
     socket.on('counter-offer-received', handleCounterOfferReceived);
     socket.on('ride-update', handleRideUpdate);
     socket.on('ride-cancelled', handleRideCancelled);
+    socket.on('nearby-drivers', handleNearbyDrivers);
 
     return () => {
       socket.off('driver-location', handleDriverLocation);
@@ -347,6 +319,7 @@ const RideTrackingScreen = () => {
       socket.off('counter-offer-received', handleCounterOfferReceived);
       socket.off('ride-update', handleRideUpdate);
       socket.off('ride-cancelled', handleRideCancelled);
+      socket.off('nearby-drivers', handleNearbyDrivers);
     };
   }, [socket, rideId, dispatch]);
 
@@ -620,6 +593,28 @@ const RideTrackingScreen = () => {
             </Marker>
           );
         })}
+
+        {currentRide?.status === 'searching' && nearbyDrivers.map((driver, idx) => {
+          if (!driver.location?.coordinates || driver.location.coordinates.length < 2) return null;
+          // Avoid duplicating markers if the driver has already sent a counter-offer
+          if (counterOffers.some(offer => offer.driver?.id === driver._id || offer.driver?.driverId === driver._id)) return null;
+          return (
+            <Marker
+              key={`nearby-${driver._id || idx}`}
+              coordinate={{
+                latitude: driver.location.coordinates[1],
+                longitude: driver.location.coordinates[0],
+              }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              zIndex={80}
+              tracksViewChanges={false}
+            >
+              <View style={[styles.driverCarMarker, { opacity: 0.6 }]}>
+                <Icon name="directions-car" size={16} color={colors.text} />
+              </View>
+            </Marker>
+          );
+        })}
         
         {routeCoords.length > 0 && (
           <Polyline
@@ -629,6 +624,22 @@ const RideTrackingScreen = () => {
           />
         )}
       </MapView>
+
+      {/* Trip ETA + distance from the Directions response */}
+      {routeInfo && (
+        <View style={styles.etaBar}>
+          <View style={styles.etaItem}>
+            <Icon name="schedule" size={16} color={colors.textSecondary} />
+            <Text style={styles.etaValue}>{routeInfo.durationText}</Text>
+          </View>
+          <View style={styles.etaDivider} />
+          <View style={styles.etaItem}>
+            <Icon name="straighten" size={16} color={colors.textSecondary} />
+            <Text style={styles.etaValue}>{routeInfo.distanceText}</Text>
+          </View>
+          {routeInfo.isEstimate && <Text style={styles.etaApprox}>approx.</Text>}
+        </View>
+      )}
 
       {/* Counter Offers */}
       {currentRide?.status === 'searching' && counterOffers.length > 0 && (
@@ -844,6 +855,41 @@ const createStyles = (colors, isDark) => {
   },
   map: {
     flex: 1,
+  },
+  etaBar: {
+    position: 'absolute',
+    top: 70,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: cardBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    elevation: 4,
+  },
+  etaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  etaValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  etaDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 16,
+    marginHorizontal: 12,
+    backgroundColor: colors.border,
+  },
+  etaApprox: {
+    marginLeft: 8,
+    fontSize: 11,
+    color: colors.textSecondary,
   },
   driverCarMarker: {
     backgroundColor: cardBg,

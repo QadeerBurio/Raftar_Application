@@ -29,6 +29,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { startRide, completeRide, cancelRide } from '../../redux/slices/driverSlice';
 import { sendChatMessage } from '../../redux/slices/rideSlice';
 import { API_URL, GOOGLE_MAPS_API_KEY, VOIP_CALLING_ENABLED } from '../../config/constants';
+import { getDirections } from '../../services/maps';
 import RatingComponent from '../../components/common/RatingComponent';
 import { useSocket } from '../../context/SocketContext';
 import CallService from '../../services/CallService';
@@ -61,6 +62,8 @@ const ActiveRideScreen = () => {
   const [driverToPickupCoords, setDriverToPickupCoords] = useState([]);
   const [pickupToDropoffCoords, setPickupToDropoffCoords] = useState([]);
   const [distanceToPickup, setDistanceToPickup] = useState(null);
+  const [pickupEta, setPickupEta] = useState(null);
+  const [tripEta, setTripEta] = useState(null);
   const [rideState, setRideState] = useState(ride?.status === 'searching' ? 'pending' : (ride?.status || 'accepted'));
   const [loading, setLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -186,55 +189,35 @@ const ActiveRideScreen = () => {
     return R * c;
   };
 
-  const decodePolyline = (t, e) => {
-    for (var n, o, u = 0, l = 0, r = 0, d = [], h = 0, i = 0, a = null, c = Math.pow(10, e || 5); u < t.length; ) {
-      a = null, h = 0, i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      n = 1 & i ? ~(i >> 1) : i >> 1, h = i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      o = 1 & i ? ~(i >> 1) : i >> 1, l += n, r += o, d.push([l / c, r / c]);
-    }
-    return d.map(p => ({ latitude: p[0], longitude: p[1] }));
-  };
-
   const fetchRoutes = async (drvLoc) => {
-    if (!ride.pickup?.location?.coordinates || !ride.dropoff?.location?.coordinates || !GOOGLE_MAPS_API_KEY) return;
-    
+    if (!ride.pickup?.location?.coordinates || !ride.dropoff?.location?.coordinates) return;
+
     const [startLng, startLat] = ride.pickup.location.coordinates;
-    const [endLng, endLat] = ride.dropoff.location.coordinates;
     const drvLat = drvLoc.latitude;
     const drvLng = drvLoc.longitude;
 
-    const dist = getDistance(drvLat, drvLng, startLat, startLng);
-    setDistanceToPickup(dist);
+    setDistanceToPickup(getDistance(drvLat, drvLng, startLat, startLng));
 
-    try {
-      const resp1 = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${drvLat},${drvLng}&destination=${startLat},${startLng}&key=${GOOGLE_MAPS_API_KEY}`);
-      const respJson1 = await resp1.json();
-      if (respJson1.routes?.length) {
-        const points = decodePolyline(respJson1.routes[0].overview_polyline.points);
-        setDriverToPickupCoords(points);
-        if (mapRef.current && rideState === 'accepted') {
-          mapRef.current.fitToCoordinates(points, {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          });
-        }
-      } else {
-        setDriverToPickupCoords([{ latitude: drvLat, longitude: drvLng }, { latitude: startLat, longitude: startLng }]);
-      }
+    // Leg 1: driver -> pickup. Leg 2: pickup -> dropoff (via any stops).
+    const [toPickup, toDropoff] = await Promise.all([
+      getDirections(drvLoc, ride.pickup),
+      getDirections(ride.pickup, ride.dropoff, ride.waypoints || []),
+    ]);
 
-      const resp2 = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&key=${GOOGLE_MAPS_API_KEY}`);
-      const respJson2 = await resp2.json();
-      if (respJson2.routes?.length) {
-        setPickupToDropoffCoords(decodePolyline(respJson2.routes[0].overview_polyline.points));
-      } else {
-        setPickupToDropoffCoords([{ latitude: startLat, longitude: startLng }, { latitude: endLat, longitude: endLng }]);
+    if (toPickup) {
+      setDriverToPickupCoords(toPickup.coordinates);
+      setPickupEta({ durationText: toPickup.durationText, distanceText: toPickup.distanceText });
+      if (mapRef.current && rideState === 'accepted' && toPickup.coordinates.length) {
+        mapRef.current.fitToCoordinates(toPickup.coordinates, {
+          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+          animated: true,
+        });
       }
-    } catch (error) {
-      console.log('Error fetching directions:', error);
-      setDriverToPickupCoords([{ latitude: drvLat, longitude: drvLng }, { latitude: startLat, longitude: startLng }]);
-      setPickupToDropoffCoords([{ latitude: startLat, longitude: startLng }, { latitude: endLat, longitude: endLng }]);
+    }
+
+    if (toDropoff) {
+      setPickupToDropoffCoords(toDropoff.coordinates);
+      setTripEta({ durationText: toDropoff.durationText, distanceText: toDropoff.distanceText });
     }
   };
 
@@ -485,14 +468,26 @@ const ActiveRideScreen = () => {
             )}
           </MapView>
 
-          {/* Map Overlay Info */}
+          {/* Map Overlay Info — driving ETA when available, straight-line distance otherwise */}
           <View style={styles.mapOverlay}>
             <View style={styles.mapInfo}>
               <IconMC name="map-marker-distance" size={14} color={WHITE} />
               <Text style={styles.mapInfoText}>
-                {distanceToPickup ? `${(distanceToPickup / 1000).toFixed(1)} km to pickup` : 'Loading distance...'}
+                {pickupEta
+                  ? `${pickupEta.durationText} · ${pickupEta.distanceText} to pickup`
+                  : distanceToPickup
+                  ? `${(distanceToPickup / 1000).toFixed(1)} km to pickup`
+                  : 'Loading distance...'}
               </Text>
             </View>
+            {tripEta && (
+              <View style={styles.mapInfo}>
+                <IconMC name="flag-checkered" size={14} color={WHITE} />
+                <Text style={styles.mapInfoText}>
+                  {`Trip: ${tripEta.durationText} · ${tripEta.distanceText}`}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 

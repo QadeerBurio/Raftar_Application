@@ -50,10 +50,19 @@ exports.register = async (req, res, next) => {
 
 exports.login = async (req, res) => {
   try {
-    const { phoneNumber, password } = req.body;
+    const { phoneNumber, email, password } = req.body;
+    
+    const query = {};
+    if (email) {
+      query.email = email;
+    } else if (phoneNumber) {
+      query.phoneNumber = phoneNumber;
+    } else {
+      return res.status(400).json({ error: 'Phone number or email is required' });
+    }
 
     // Find user
-    const user = await User.findOne({ phoneNumber });
+    const user = await User.findOne(query);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }

@@ -30,8 +30,15 @@ const theme = createTheme({
   },
 });
 
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('adminToken');
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
 function App() {
-  const isAuthenticated = localStorage.getItem('adminToken');
   const [appState, setAppState] = useState({
     users: [],
     drivers: [],
@@ -50,7 +57,9 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={
-              isAuthenticated ? <Layout /> : <Navigate to="/login" />
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />
               <Route path="users" element={<Users />} />

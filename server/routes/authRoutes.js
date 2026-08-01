@@ -25,8 +25,13 @@ router.post(
 router.post(
   '/login',
   [
-    body('phoneNumber').isMobilePhone().withMessage('Valid phone number required'),
     body('password').notEmpty().withMessage('Password is required'),
+    body().custom((value) => {
+      if (!value.phoneNumber && !value.email) {
+        throw new Error('Either phone number or email is required');
+      }
+      return true;
+    })
   ],
   validateRequest,
   authController.login

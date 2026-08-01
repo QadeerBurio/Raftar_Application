@@ -75,6 +75,16 @@ exports.createRide = async (req, res) => {
     // Emit socket event to drivers globally so they see the request without manual refresh
     req.app.get('io').emit('new-ride-request', ride);
 
+    if (nearbyDrivers && nearbyDrivers.length > 0) {
+      const driversPayload = nearbyDrivers.map(d => ({
+        _id: d._id,
+        location: { coordinates: d.location.coordinates }
+      }));
+      req.app.get('io').to(`ride-${ride._id.toString()}`).emit('nearby-drivers', {
+        drivers: driversPayload
+      });
+    }
+
     res.status(201).json({
       success: true,
       ride,
@@ -648,6 +658,30 @@ exports.updateDriverLocation = async (req, res) => {
         req.app.get('io').to(`ride-${ride._id.toString()}`).emit('driver-location', {
           rideId: ride._id,
           location: driver.location
+        });
+      }
+    } else if (driver.availability.status === 'available') {
+      // Driver is available, check for nearby searching rides to update their maps
+      const searchingRides = await Ride.find({
+        status: 'searching',
+        'pickup.location': {
+          $near: {
+            $geometry: driver.location,
+            $maxDistance: 10000 // 10km radius
+          }
+        },
+        vehicleType: driver.vehicleDetails?.type || { $exists: true }
+      });
+
+      for (const ride of searchingRides) {
+        const nearbyDrivers = await findNearbyDrivers(ride.pickup.location, ride.vehicleType);
+        const driversPayload = nearbyDrivers.map(d => ({
+          _id: d._id,
+          location: { coordinates: d.location.coordinates }
+        }));
+        
+        req.app.get('io').to(`ride-${ride._id.toString()}`).emit('nearby-drivers', {
+          drivers: driversPayload
         });
       }
     }

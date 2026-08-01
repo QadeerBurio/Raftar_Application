@@ -15,12 +15,25 @@ import OTPTextInput from 'react-native-otp-textinput';
 import Button from '../../components/common/Button';
 import { verifyOTP, sendOTP } from '../../redux/slices/authSlice';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const OTPScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const dispatch = useDispatch();
   const otpInput = useRef(null);
+  const { isDark } = useTheme();
+
+  const palette = React.useMemo(() => ({
+    bg: isDark ? '#0F0F0F' : '#FFFFFF',
+    cards: isDark ? '#1A1A1A' : '#F5F5F5',
+    text: isDark ? '#FFFFFF' : '#111111',
+    secondary: isDark ? '#8A8A8A' : '#6A6A6A',
+    accent: '#FFC107',
+    border: isDark ? '#333333' : '#F0F0F0',
+  }), [isDark]);
+
+  const styles = React.useMemo(() => createStyles(palette), [palette]);
   
   const { phoneNumber } = route.params || {};
   const [otp, setOtp] = useState('');
@@ -90,16 +103,16 @@ const OTPScreen = () => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-back" size={24} color="#FFF" />
+          <Icon name="arrow-back" size={24} color={palette.text} />
         </TouchableOpacity>
 
         <View style={styles.header}>
           <View style={styles.iconContainer}>
-            <Icon name="verified" size={60} color="#FFD700" />
+            <Icon name="verified" size={60} color={palette.accent} />
           </View>
           <Text style={styles.title}>Verify Your Phone</Text>
           <Text style={styles.subtitle}>
-            We've sent a verification code to {'\n'}
+            We&apos;ve sent a verification code to {'\n'}
             <Text style={styles.phoneNumber}>{phoneNumber}</Text>
           </Text>
         </View>
@@ -110,8 +123,8 @@ const OTPScreen = () => {
             handleTextChange={setOtp}
             inputCount={6}
             autoFocus
-            tintColor="#FFD700"
-            offTintColor="#333"
+            tintColor={palette.accent}
+            offTintColor={palette.border}
             textInputStyle={styles.otpInput}
             containerStyle={styles.otpContainerStyle}
           />
@@ -127,7 +140,7 @@ const OTPScreen = () => {
 
         <View style={styles.resendContainer}>
           <Text style={styles.resendText}>
-            Didn't receive the code? 
+            Didn&apos;t receive the code? 
           </Text>
           {canResend ? (
             <TouchableOpacity onPress={handleResendOTP}>
@@ -149,10 +162,10 @@ const OTPScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: palette.bg,
   },
   content: {
     flex: 1,
@@ -172,27 +185,27 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: palette.cards,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 2,
-    borderColor: '#FFD700',
+    borderColor: palette.accent,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: palette.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#888',
+    color: palette.secondary,
     textAlign: 'center',
     lineHeight: 24,
   },
   phoneNumber: {
-    color: '#FFD700',
+    color: palette.accent,
     fontWeight: 'bold',
   },
   otpContainer: {
@@ -208,8 +221,8 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 12,
     borderWidth: 2,
-    backgroundColor: '#2A2A2A',
-    color: '#FFF',
+    backgroundColor: palette.cards,
+    color: palette.text,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -222,16 +235,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resendText: {
-    color: '#888',
+    color: palette.secondary,
     fontSize: 14,
   },
   resendLink: {
-    color: '#FFD700',
+    color: palette.accent,
     fontSize: 14,
     fontWeight: 'bold',
   },
   timerText: {
-    color: '#666',
+    color: palette.secondary,
     fontSize: 14,
   },
   changeNumber: {
@@ -239,7 +252,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   changeNumberText: {
-    color: '#888',
+    color: palette.secondary,
     fontSize: 14,
     textDecorationLine: 'underline',
   },

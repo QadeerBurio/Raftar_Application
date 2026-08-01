@@ -29,7 +29,7 @@ const Sidebar = ({ drawerWidth, mobileOpen, handleDrawerToggle }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Users', icon: <PeopleIcon />, path: '/users' },
+    { text: 'Passengers', icon: <PeopleIcon />, path: '/users' },
     { text: 'Drivers', icon: <DirectionsCarIcon />, path: '/drivers' },
     { text: 'Trips', icon: <TripOriginIcon />, path: '/trips' },
     { text: 'Payments', icon: <PaymentsIcon />, path: '/payments' },

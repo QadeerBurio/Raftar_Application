@@ -1,18 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { GOOGLE_MAPS_API_KEY } from '../../config/constants';
-
-const decodePolyline = (t, e) => {
-  for (var n, o, u = 0, l = 0, r = 0, d = [], h = 0, i = 0, a = null, c = Math.pow(10, e || 5); u < t.length; ) {
-    a = null, h = 0, i = 0;
-    do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-    n = 1 & i ? ~(i >> 1) : i >> 1, h = i = 0;
-    do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-    o = 1 & i ? ~(i >> 1) : i >> 1, l += n, r += o, d.push([l / c, r / c]);
-  }
-  return d.map(p => ({ latitude: p[0], longitude: p[1] }));
-};
+import { getDirections } from '../../services/maps';
 
 const CarpoolMapPreview = ({ pickup, dropoff, style }) => {
   const [routeCoords, setRouteCoords] = useState([]);
@@ -30,28 +19,17 @@ const CarpoolMapPreview = ({ pickup, dropoff, style }) => {
 
   useEffect(() => {
     const fetchRoute = async () => {
-      if (!pLoc[0] || !dLoc[0] || !GOOGLE_MAPS_API_KEY) return;
-      try {
-        const startLng = pLoc[0];
-        const startLat = pLoc[1];
-        const endLng = dLoc[0];
-        const endLat = dLoc[1];
+      if (!pLoc[0] || !dLoc[0]) return;
 
-        const resp = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&key=${GOOGLE_MAPS_API_KEY}`);
-        const respJson = await resp.json();
-        
-        if (respJson.routes && respJson.routes.length) {
-          const points = decodePolyline(respJson.routes[0].overview_polyline.points);
-          setRouteCoords(points);
-          if (mapRef.current) {
-            mapRef.current.fitToCoordinates(points, {
-              edgePadding: { top: 30, right: 30, bottom: 30, left: 30 },
-              animated: true,
-            });
-          }
-        }
-      } catch (error) {
-        console.log('Error fetching carpool route:', error);
+      const route = await getDirections(pickup, dropoff);
+      if (!route?.coordinates?.length) return;
+
+      setRouteCoords(route.coordinates);
+      if (mapRef.current) {
+        mapRef.current.fitToCoordinates(route.coordinates, {
+          edgePadding: { top: 30, right: 30, bottom: 30, left: 30 },
+          animated: true,
+        });
       }
     };
 

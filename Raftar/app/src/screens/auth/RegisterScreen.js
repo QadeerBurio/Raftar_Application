@@ -21,6 +21,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { register, clearError } from '../../redux/slices/authSlice';
 import { validatePhoneNumber, validatePassword } from '../../utils/validators';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,6 +29,18 @@ const RegisterScreen = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.auth);
+  const { isDark } = useTheme();
+
+  const palette = React.useMemo(() => ({
+    bg: isDark ? '#0F0F0F' : '#FFFFFF',
+    cards: isDark ? '#1A1A1A' : '#F5F5F5',
+    text: isDark ? '#FFFFFF' : '#111111',
+    secondary: isDark ? '#8A8A8A' : '#6A6A6A',
+    accent: '#FFC107',
+    border: isDark ? '#333333' : '#F0F0F0',
+  }), [isDark]);
+
+  const styles = React.useMemo(() => createStyles(palette), [palette]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -227,12 +240,12 @@ const RegisterScreen = () => {
           errors[field] && styles.inputContainerError
         ]}>
           <View style={styles.inputIcon}>
-            <Icon name={icon} size={22} color="#666" />
+            <Icon name={icon} size={22} color={palette.secondary} />
           </View>
           <TextInput
             style={styles.input}
             placeholder={placeholder}
-            placeholderTextColor="#999"
+            placeholderTextColor={palette.secondary}
             value={formData[field]}
             onChangeText={(value) => handleChange(field, value)}
             secureTextEntry={isSecure}
@@ -246,7 +259,7 @@ const RegisterScreen = () => {
               <Icon 
                 name={isSecure ? 'visibility-off' : 'visibility'} 
                 size={22} 
-                color="#888" 
+                color={palette.secondary} 
               />
             </TouchableOpacity>
           )}
@@ -255,7 +268,7 @@ const RegisterScreen = () => {
               onPress={() => handleChange(field, '')}
               style={styles.clearButton}
             >
-              <Icon name="close" size={18} color="#888" />
+              <Icon name="close" size={18} color={palette.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -268,7 +281,7 @@ const RegisterScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={palette.bg} />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -342,7 +355,7 @@ const RegisterScreen = () => {
                   <Icon 
                     name="person" 
                     size={24} 
-                    color={formData.role === 'passenger' ? '#F9C349' : '#888'} 
+                    color={formData.role === 'passenger' ? palette.accent : palette.secondary} 
                   />
                   <Text style={[
                     styles.roleText,
@@ -361,7 +374,7 @@ const RegisterScreen = () => {
                   <Icon 
                     name="directions-car" 
                     size={24} 
-                    color={formData.role === 'driver' ? '#F9C349' : '#888'} 
+                    color={formData.role === 'driver' ? palette.accent : palette.secondary} 
                   />
                   <Text style={[
                     styles.roleText,
@@ -469,7 +482,7 @@ const RegisterScreen = () => {
                 ) : (
                   <>
                     <Text style={styles.registerButtonText}>Create Account</Text>
-                    <Icon name="arrow-forward" size={24} color="#FFF" />
+                    <Icon name="arrow-forward" size={24} color={palette.bg} />
                   </>
                 )}
               </TouchableOpacity>
@@ -500,14 +513,14 @@ const RegisterScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (palette) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.bg,
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.bg,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -535,13 +548,13 @@ const styles = StyleSheet.create({
   welcomeTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#000',
+    color: palette.text,
     letterSpacing: -0.5,
     lineHeight: 36,
   },
   welcomeSubtitle: {
     fontSize: 14,
-    color: '#888',
+    color: palette.secondary,
     marginTop: 4,
     fontWeight: '400',
     lineHeight: 20,
@@ -555,7 +568,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    color: '#000',
+    color: palette.text,
     fontSize: 14,
     marginBottom: 6,
     fontWeight: '600',
@@ -563,11 +576,11 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
+    backgroundColor: palette.cards,
     borderRadius: 14,
     paddingHorizontal: 16,
     borderWidth: 1.5,
-    borderColor: '#F0F0F0',
+    borderColor: palette.border,
     height: 54,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -585,7 +598,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: '#000',
+    color: palette.text,
     height: '100%',
     fontWeight: '400',
   },
@@ -609,7 +622,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   roleLabel: {
-    color: '#000',
+    color: palette.text,
     fontSize: 14,
     marginBottom: 10,
     fontWeight: '600',
@@ -624,10 +637,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: palette.cards,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#F0F0F0',
+    borderColor: palette.border,
     gap: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -636,21 +649,21 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   roleButtonActive: {
-    borderColor: '#F9C349',
-    backgroundColor: '#FFF8E8',
-    shadowColor: '#F9C349',
+    borderColor: palette.accent,
+    backgroundColor: palette.cards,
+    shadowColor: palette.accent,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
   },
   roleText: {
-    color: '#888',
+    color: palette.secondary,
     fontSize: 14,
     fontWeight: '500',
   },
   roleTextActive: {
-    color: '#000',
+    color: palette.text,
     fontWeight: '600',
   },
 
@@ -660,8 +673,8 @@ const styles = StyleSheet.create({
     height: 54,
   },
   photoInputActive: {
-    borderColor: '#F9C349',
-    backgroundColor: '#FFF8E8',
+    borderColor: palette.accent,
+    backgroundColor: palette.cards,
   },
   photoInputContent: {
     flex: 1,
@@ -674,20 +687,20 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: palette.border,
   },
   photoInputText: {
     fontSize: 14,
-    color: '#000',
+    color: palette.text,
     flex: 1,
   },
   photoPlaceholderText: {
     fontSize: 14,
-    color: '#999',
+    color: palette.secondary,
     flex: 1,
   },
   photoHint: {
-    color: '#999',
+    color: palette.secondary,
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -698,7 +711,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   registerButton: {
-    backgroundColor: '#000',
+    backgroundColor: palette.text,
     borderRadius: 14,
     height: 56,
     flexDirection: 'row',
@@ -715,7 +728,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   registerButtonText: {
-    color: '#FFF',
+    color: palette.bg,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -729,8 +742,8 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderWidth: 2.5,
-    borderColor: '#FFF',
-    borderTopColor: '#F9C349',
+    borderColor: palette.bg,
+    borderTopColor: palette.accent,
     borderRadius: 11,
     marginRight: 12,
   },
@@ -743,12 +756,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   loginText: {
-    color: '#888',
+    color: palette.secondary,
     fontSize: 15,
     fontWeight: '400',
   },
   loginLink: {
-    color: '#F9C349',
+    color: palette.accent,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -757,7 +770,7 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF5F5',
+    backgroundColor: palette.cards,
     padding: 12,
     borderRadius: 12,
     marginBottom: 14,

@@ -42,8 +42,8 @@ const Login = () => {
         role: 'admin'
       });
 
-      localStorage.setItem('adminToken', response.token);
-      localStorage.setItem('adminUser', JSON.stringify(response.user));
+      localStorage.setItem('adminToken', response.data.token);
+      localStorage.setItem('adminUser', JSON.stringify(response.data.user));
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid credentials');

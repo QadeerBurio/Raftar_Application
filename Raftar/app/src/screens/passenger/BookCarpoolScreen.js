@@ -34,6 +34,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { createCarpoolBooking, getAvailableCarpools, joinCarpool, createCarpoolRequest } from '../../redux/slices/bookingSlice';
 import { GOOGLE_MAPS_API_KEY } from '../../config/constants';
+import { getDirections } from '../../services/maps';
 import api from '../../services/api';
 import socketService from '../../services/socket';
 import CarpoolMapPreview from '../../components/common/CarpoolMapPreview';
@@ -67,6 +68,7 @@ const BookCarpoolScreen = () => {
   const dropoffRef = useRef(null);
   const pickerMapRef = useRef(null);
   const [routeCoords, setRouteCoords] = useState([]);
+  const [routeInfo, setRouteInfo] = useState(null);
   const [locationLoading, setLocationLoading] = useState(true);
 
   const [mapPickerVisible, setMapPickerVisible] = useState(false);
@@ -233,47 +235,26 @@ const BookCarpoolScreen = () => {
     setMapPickerVisible(false);
   };
 
-  const decodePolyline = (t, e) => {
-    for (var n, o, u = 0, l = 0, r = 0, d = [], h = 0, i = 0, a = null, c = Math.pow(10, e || 5); u < t.length; ) {
-      a = null, h = 0, i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      n = 1 & i ? ~(i >> 1) : i >> 1, h = i = 0;
-      do a = t.charCodeAt(u++) - 63, i |= (31 & a) << h, h += 5; while (a >= 32);
-      o = 1 & i ? ~(i >> 1) : i >> 1, l += n, r += o, d.push([l / c, r / c]);
-    }
-    return d.map(p => ({ latitude: p[0], longitude: p[1] }));
-  };
-
   const fetchRoute = async () => {
-    if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates || !GOOGLE_MAPS_API_KEY) return;
-    
-    const [startLng, startLat] = pickup.location.coordinates;
-    const [endLng, endLat] = dropoff.location.coordinates;
+    if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates) return;
 
-    try {
-      const resp = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&key=${GOOGLE_MAPS_API_KEY}`);
-      const respJson = await resp.json();
-      if (respJson.routes.length) {
-        const points = decodePolyline(respJson.routes[0].overview_polyline.points);
-        setRouteCoords(points);
-        
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates(points, {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          });
-        }
-      } else {
-        setRouteCoords([
-          { latitude: startLat, longitude: startLng },
-          { latitude: endLat, longitude: endLng }
-        ]);
-      }
-    } catch (error) {
-      setRouteCoords([
-        { latitude: startLat, longitude: startLng },
-        { latitude: endLat, longitude: endLng }
-      ]);
+    // Shared maps service: picks the fastest route, decodes the road polyline,
+    // logs the real Google error, and falls back to a flagged estimate.
+    const route = await getDirections(pickup, dropoff);
+    if (!route) return;
+
+    setRouteCoords(route.coordinates);
+    setRouteInfo({
+      distanceText: route.distanceText,
+      durationText: route.durationText,
+      isEstimate: route.isFallback,
+    });
+
+    if (mapRef.current && route.coordinates.length) {
+      mapRef.current.fitToCoordinates(route.coordinates, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
     }
   };
 
