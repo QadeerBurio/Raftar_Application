@@ -73,8 +73,8 @@ const Drivers = () => {
         console.log(`Fetched ${response.data.drivers.length} drivers with status pending`);
       }
       
-      setDrivers(response.data.drivers);
-      setTotalDrivers(response.data.total);
+      setDrivers(response.data.drivers || []);
+      setTotalDrivers(response.data.pagination?.total || response.data.total || 0);
     } catch (error) {
       console.error('Error fetching drivers:', error);
     } finally {
@@ -151,17 +151,31 @@ const Drivers = () => {
     return <Chip label={config.label} color={config.color} size="small" />;
   };
 
+  const getFullImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    
+    // The db might store an absolute file path like '/home/.../server/uploads/filename.jpg'
+    // We just want '/uploads/filename.jpg'
+    const fileName = url.substring(url.lastIndexOf('/') + 1);
+    const formattedUrl = `/uploads/${fileName}`;
+
+    const baseUrl = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace('/api', '') : 'http://localhost:5000';
+    return `${baseUrl}${formattedUrl}`;
+  };
+
   const renderDocument = (url, label) => {
     if (!url) return <Typography variant="caption" sx={{ color: '#666', mr: 2 }}>No {label}</Typography>;
+    const fullUrl = getFullImageUrl(url);
     return (
       <Box sx={{ mr: 2, mb: 2, textAlign: 'center' }}>
         <Typography variant="caption" sx={{ color: '#888', display: 'block', mb: 1 }}>{label}</Typography>
         <Box 
           component="img" 
-          src={url} 
+          src={fullUrl} 
           alt={label}
           sx={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 1, cursor: 'pointer', border: '1px solid #4ECDC4' }}
-          onClick={() => setFullscreenImage(url)}
+          onClick={() => setFullscreenImage(fullUrl)}
         />
       </Box>
     );

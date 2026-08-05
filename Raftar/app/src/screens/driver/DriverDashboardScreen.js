@@ -362,13 +362,7 @@ const DriverDashboardScreen = () => {
       screen: 'Earnings',
       color: '#4ECDC4'
     },
-    {
-      title: 'Create Carpool',
-      icon: 'add-circle',
-      iconType: 'material',
-      screen: 'CreateCarpool',
-      color: '#FF6B6B'
-    },
+
     {
       title: 'Manage Carpools',
       icon: 'people',
@@ -509,82 +503,7 @@ const DriverDashboardScreen = () => {
             </TouchableOpacity>
           )}
 
-          {/* Map Section with Ride Requests */}
-          <View style={styles.mapSection}>
-            <View style={styles.mapHeader}>
-              <Text style={styles.mapTitle}>Nearby Ride Requests</Text>
-              <TouchableOpacity 
-                style={styles.viewAllButton}
-                onPress={() => navigation.navigate('RideRequest')}
-              >
-                <Text style={styles.viewAllText}>View All</Text>
-                <Icon name="chevron-right" size={16} color={YELLOW_PRIMARY} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.mapContainer}>
-              <MapView
-                ref={mapRef}
-                style={styles.map}
-                provider={PROVIDER_GOOGLE}
-                initialRegion={{
-                  latitude: userLocation?.latitude || 37.78825,
-                  longitude: userLocation?.longitude || -122.4324,
-                  latitudeDelta: 0.05,
-                  longitudeDelta: 0.05,
-                }}
-                showsUserLocation={true}
-                showsMyLocationButton={false}
-                showsCompass={false}
-              >
-                {rideRequests.map((request) => (
-                  <Marker
-                    key={request.id}
-                    coordinate={request.pickup}
-                    onPress={() => handleMarkerPress(request)}
-                  >
-                    <View style={styles.markerContainer}>
-                      <LinearGradient
-                        colors={[YELLOW_PRIMARY, YELLOW_SECONDARY]}
-                        style={styles.markerGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      >
-                        <Icon name="person-pin" size={20} color={WHITE} />
-                      </LinearGradient>
-                    </View>
-                  </Marker>
-                ))}
-                {userLocation && (
-                  <Circle
-                    center={userLocation}
-                    radius={200}
-                    strokeColor={`${YELLOW_PRIMARY}40`}
-                    fillColor={`${YELLOW_PRIMARY}10`}
-                    strokeWidth={2}
-                  />
-                )}
-              </MapView>
-              <View style={styles.mapOverlay}>
-                <View style={styles.requestCounter}>
-                  <IconMC name="car-multiple" size={16} color={WHITE} />
-                  <Text style={styles.requestCounterText}>{rideRequests.length} nearby</Text>
-                </View>
-              </View>
-            </View>
-          </View>
 
-          {/* Stats Cards */}
-          <View style={styles.statsGrid}>
-            {statsCards.map((stat, index) => (
-              <View key={index} style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: stat.color + '15' }]}>
-                  {getIcon(stat.icon, stat.iconType, 24, stat.color)}
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statTitle}>{stat.title}</Text>
-              </View>
-            ))}
-          </View>
 
           {/* Quick Actions */}
           <View style={styles.sectionHeader}>

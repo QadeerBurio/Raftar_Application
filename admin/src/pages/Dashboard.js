@@ -235,14 +235,7 @@ const Dashboard = () => {
                     <Typography variant="h4" sx={{ color: '#FFF' }}>
                       {card.value}
                     </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: card.change.startsWith('+') ? '#4ECDC4' : '#FF6B6B',
-                      }}
-                    >
-                      {card.change} from last month
-                    </Typography>
+
                   </Box>
                   <Box
                     sx={{
@@ -263,79 +256,84 @@ const Dashboard = () => {
         ))}
       </Grid>
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3, backgroundColor: '#1E1E1E' }}>
+      <Grid container spacing={3} sx={{ mt: 2, alignItems: 'stretch' }}>
+        <Grid item xs={12} lg={4} sx={{ display: 'flex' }}>
+          <Paper sx={{ p: 3, backgroundColor: '#1E1E1E', width: '100%', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" gutterBottom sx={{ color: '#FFF' }}>
               Earnings Overview
             </Typography>
-            <Line
-              data={chartData.earningsData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    labels: { color: '#FFF' }
-                  }
-                },
-                scales: {
-                  y: {
-                    ticks: { color: '#FFF' }
-                  },
-                  x: {
-                    ticks: { color: '#FFF' }
-                  }
-                }
-              }}
-            />
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, pb: 2 }}>
+              {chartData.earningsData.labels.length > 1 ? (
+                <Line
+                  data={chartData.earningsData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { labels: { color: '#FFF' } }
+                    },
+                    scales: {
+                      y: { ticks: { color: '#FFF' } },
+                      x: { ticks: { color: '#FFF' } }
+                    }
+                  }}
+                />
+              ) : (
+                <Typography sx={{ color: '#888' }}>No earnings data yet</Typography>
+              )}
+            </Box>
           </Paper>
         </Grid>
 
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, backgroundColor: '#1E1E1E' }}>
+        <Grid item xs={12} lg={4} sx={{ display: 'flex' }}>
+          <Paper sx={{ p: 3, backgroundColor: '#1E1E1E', width: '100%', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" gutterBottom sx={{ color: '#FFF' }}>
               Ride Types
             </Typography>
-            <Pie
-              data={chartData.rideTypesData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    labels: { color: '#FFF' }
-                  }
-                }
-              }}
-            />
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, pb: 2 }}>
+              {chartData.rideTypesData.datasets[0]?.data?.length > 0 ? (
+                <Pie
+                  data={chartData.rideTypesData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { labels: { color: '#FFF' } }
+                    }
+                  }}
+                />
+              ) : (
+                <Typography sx={{ color: '#888' }}>No ride data yet</Typography>
+              )}
+            </Box>
           </Paper>
         </Grid>
-      </Grid>
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, backgroundColor: '#1E1E1E' }}>
+        <Grid item xs={12} lg={4} sx={{ display: 'flex' }}>
+          <Paper sx={{ p: 3, backgroundColor: '#1E1E1E', width: '100%', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" gutterBottom sx={{ color: '#FFF' }}>
               Peak Hours Activity
             </Typography>
-            <Bar
-              data={chartData.hoursData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    labels: { color: '#FFF' }
-                  }
-                },
-                scales: {
-                  y: {
-                    ticks: { color: '#FFF' }
-                  },
-                  x: {
-                    ticks: { color: '#FFF' }
-                  }
-                }
-              }}
-            />
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, pb: 2 }}>
+              {chartData.hoursData.datasets[0]?.data?.some(val => val > 0) ? (
+                <Bar
+                  data={chartData.hoursData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { labels: { color: '#FFF' } }
+                    },
+                    scales: {
+                      y: { ticks: { color: '#FFF' } },
+                      x: { ticks: { color: '#FFF' } }
+                    }
+                  }}
+                />
+              ) : (
+                <Typography sx={{ color: '#888' }}>No activity data yet</Typography>
+              )}
+            </Box>
           </Paper>
         </Grid>
       </Grid>
