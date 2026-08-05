@@ -264,10 +264,16 @@ const BookIntercityScreen = () => {
   const calculateFare = async () => {
     if (!pickup || !dropoff) return;
     try {
-      const response = await api.post('/rides/calculate-fare', {
-        pickup: pickup.location,
-        dropoff: dropoff.location,
-        vehicleType: selectedVehicle
+      const response = await api.post('/pricing/calculate', {
+        pickup: pickup.location.coordinates ? { lng: pickup.location.coordinates[0], lat: pickup.location.coordinates[1] } : pickup.location,
+        dropoff: dropoff.location.coordinates ? { lng: dropoff.location.coordinates[0], lat: dropoff.location.coordinates[1] } : dropoff.location,
+        vehicle: selectedVehicle,
+        city: 'Karachi', // defaulting city
+        isCarpool: false,
+        isIntercity: true,
+        passengers: 1,
+        driversAvailable: 5,
+        hour: new Date().getHours()
       });
       setEstimatedFare(response.data.fare);
     } catch (error) {

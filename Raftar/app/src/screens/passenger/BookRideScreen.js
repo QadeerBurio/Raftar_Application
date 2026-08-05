@@ -273,13 +273,19 @@ const BookRideScreen = () => {
       const fares = {};
       
       await Promise.all(types.map(async (type) => {
-        const response = await api.post('/rides/calculate-fare', {
-          pickup: pickup,
-          dropoff: dropoff,
-          waypoints: stops,
-          vehicleType: type
+        const response = await api.post('/pricing/calculate', {
+          pickup: pickup.location.coordinates ? { lng: pickup.location.coordinates[0], lat: pickup.location.coordinates[1] } : pickup,
+          dropoff: dropoff.location.coordinates ? { lng: dropoff.location.coordinates[0], lat: dropoff.location.coordinates[1] } : dropoff,
+          stops: stops.map(s => s.location.coordinates ? { lng: s.location.coordinates[0], lat: s.location.coordinates[1] } : s),
+          vehicle: type,
+          city: 'Karachi', // defaulting city or extract from address
+          isCarpool: false,
+          isIntercity: false,
+          passengers: 1,
+          driversAvailable: 5,
+          hour: new Date().getHours()
         });
-        fares[type] = response.data.fare?.total ?? response.data.fare ?? 0;
+        fares[type] = response.data.fare ?? 0;
       }));
       
       setVehicleFares(fares);

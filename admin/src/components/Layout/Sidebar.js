@@ -34,6 +34,7 @@ const Sidebar = ({ drawerWidth, mobileOpen, handleDrawerToggle }) => {
     { text: 'Trips', icon: <TripOriginIcon />, path: '/trips' },
     { text: 'Payments', icon: <PaymentsIcon />, path: '/payments' },
     { text: 'Analytics', icon: <BarChartIcon />, path: '/analytics' },
+    { text: 'Pricing', icon: <PaymentsIcon />, path: '/pricing' },
   ];
 
   const handleLogout = () => {

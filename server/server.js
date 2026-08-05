@@ -146,6 +146,7 @@ app.use('/api/parcels', require('./routes/parcelRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/ratings', require('./routes/ratingRoutes'));
 app.use('/api/history', require('./routes/historyRoutes'));
+app.use('/api/pricing', require('./routes/pricingRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {

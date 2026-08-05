@@ -10,6 +10,7 @@ import Trips from './pages/Trips';
 import Payments from './pages/Payments';
 import Analytics from './pages/Analytics';
 import Login from './pages/Login';
+import PricingConfig from './pages/PricingConfig';
 
 // Create a simple context instead of Redux
 export const AppContext = createContext();
@@ -67,6 +68,7 @@ function App() {
               <Route path="trips" element={<Trips />} />
               <Route path="payments" element={<Payments />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="pricing" element={<PricingConfig />} />
             </Route>
           </Routes>
         </BrowserRouter>
