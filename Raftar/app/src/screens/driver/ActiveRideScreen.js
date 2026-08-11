@@ -31,8 +31,12 @@ import { sendChatMessage } from '../../redux/slices/rideSlice';
 import { API_URL, GOOGLE_MAPS_API_KEY, VOIP_CALLING_ENABLED } from '../../config/constants';
 import { getDirections } from '../../services/maps';
 import RatingComponent from '../../components/common/RatingComponent';
+import TurnByTurnComponent from '../../components/common/TurnByTurnComponent';
+import MapControls from '../../components/common/MapControls';
 import { useSocket } from '../../context/SocketContext';
 import CallService from '../../services/CallService';
+
+const SIMULATE_NAVIGATION = true;
 
 const { width, height } = Dimensions.get('window');
 
@@ -71,6 +75,12 @@ const ActiveRideScreen = () => {
   const [stopState, setStopState] = useState('heading'); // 'heading' or 'arrived'
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState(ride?.chat || []);
+  
+  // Navigation State
+  const [heading, setHeading] = useState(0);
+  const [simStep, setSimStep] = useState(0);
+  const [turnInstruction, setTurnInstruction] = useState('Head straight towards route');
+  
   const { user } = useSelector(state => state.auth);
 
   const mapRef = useRef(null);
@@ -120,6 +130,7 @@ const ActiveRideScreen = () => {
 
     locationInterval.current = setInterval(async () => {
       try {
+        if (SIMULATE_NAVIGATION) return; // Skip real GPS updates if simulating
         const currentLoc = await Location.getCurrentPositionAsync({});
         setLocation(currentLoc.coords);
         if (socket) {
@@ -136,6 +147,80 @@ const ActiveRideScreen = () => {
       }
     }, 5000);
   };
+
+  useEffect(() => {
+    setSimStep(0);
+    setTurnInstruction('Follow the route');
+  }, [rideState]);
+
+  // Simulation Effect
+  useEffect(() => {
+    if (!SIMULATE_NAVIGATION) return;
+    
+    let path = [];
+    if (rideState === 'accepted' || rideState === 'pending') {
+      path = driverToPickupCoords;
+    } else if (rideState === 'started') {
+      path = pickupToDropoffCoords;
+    }
+    
+    if (path.length > 0) {
+      const simTimer = setInterval(() => {
+        setSimStep(prev => {
+          const nextStep = prev + 1;
+          if (nextStep < path.length) {
+            const currentPoint = path[prev];
+            const nextPoint = path[nextStep];
+            
+            // Calculate heading
+            const dy = nextPoint.latitude - currentPoint.latitude;
+            const dx = nextPoint.longitude - currentPoint.longitude;
+            let newHeading = (Math.atan2(dy, Math.cos(currentPoint.latitude * Math.PI / 180) * dx) * 180) / Math.PI;
+            
+            // Normalize heading
+            newHeading = (newHeading + 360) % 360;
+
+            setLocation({
+              latitude: currentPoint.latitude,
+              longitude: currentPoint.longitude,
+            });
+            setHeading(newHeading);
+            
+            // Generate mock turn instruction
+            if (nextStep % 15 === 0) {
+              const directions = ['Turn left in 200m', 'Turn right on Main St', 'Keep straight', 'Destination on the right'];
+              setTurnInstruction(directions[Math.floor(Math.random() * directions.length)]);
+            }
+            
+            if (socket) {
+              socket.emit('driver-location', {
+                rideId: ride._id,
+                location: { latitude: currentPoint.latitude, longitude: currentPoint.longitude, heading: newHeading }
+              });
+            }
+            
+            // Animate map camera to follow
+            if (mapRef.current) {
+               mapRef.current.animateCamera({
+                 center: { latitude: currentPoint.latitude, longitude: currentPoint.longitude },
+                 heading: newHeading,
+                 pitch: 45,
+                 altitude: 500,
+                 zoom: 17
+               }, { duration: 2000 });
+            }
+            
+            return nextStep;
+          } else {
+             setTurnInstruction(rideState === 'started' ? 'Arriving at destination' : 'Arriving at pickup');
+             clearInterval(simTimer);
+             return prev;
+          }
+        });
+      }, 2000);
+      return () => clearInterval(simTimer);
+    }
+  }, [driverToPickupCoords, pickupToDropoffCoords, rideState]);
 
   useEffect(() => {
     const handleBidAccepted = (data) => {
@@ -161,10 +246,15 @@ const ActiveRideScreen = () => {
       }
     };
 
+    const handlePassengerComing = () => {
+      Alert.alert('Passenger is coming', 'The passenger has acknowledged your arrival and is on their way out.');
+    };
+
     if (socket) {
       socket.on('bid-accepted', handleBidAccepted);
       socket.on('ride-cancelled', handleRideCancelled);
       socket.on('new-message', handleNewMessage);
+      socket.on('passenger-coming', handlePassengerComing);
     }
 
     return () => {
@@ -172,6 +262,7 @@ const ActiveRideScreen = () => {
         socket.off('bid-accepted', handleBidAccepted);
         socket.off('ride-cancelled', handleRideCancelled);
         socket.off('new-message', handleNewMessage);
+        socket.off('passenger-coming', handlePassengerComing);
       }
     };
   }, [socket, ride._id]);
@@ -229,11 +320,20 @@ const ActiveRideScreen = () => {
           'You are more than 200m away from the pickup location. Are you sure you have arrived?',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Yes, Arrived', onPress: () => setRideState('arrived') }
+            { text: 'Yes, Arrived', onPress: () => {
+                setRideState('arrived');
+                if (socket) {
+                  socket.emit('driver-arrived', { rideId: ride._id });
+                }
+              }
+            }
           ]
         );
       } else {
         setRideState('arrived');
+        if (socket) {
+          socket.emit('driver-arrived', { rideId: ride._id });
+        }
       }
     } else if (rideState === 'arrived') {
       setLoading(true);
@@ -398,6 +498,19 @@ const ActiveRideScreen = () => {
 
         {/* Map */}
         <View style={styles.mapContainer}>
+          {/* Turn-by-turn Overlay */}
+          <TurnByTurnComponent 
+            instruction={turnInstruction}
+            distance={rideState === 'accepted' ? (distanceToPickup ? `${(distanceToPickup/1000).toFixed(1)} km` : '') : ''}
+            eta={rideState === 'accepted' ? pickupEta?.durationText : tripEta?.durationText}
+          />
+
+          {/* Map Controls */}
+          <MapControls 
+            onZoomIn={() => mapRef.current?.animateToRegion({ ...location, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 500)}
+            onZoomOut={() => mapRef.current?.animateToRegion({ ...location, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 500)}
+            onCenterMap={() => mapRef.current?.animateCamera({ center: location, heading: heading, pitch: 45, zoom: 17 })}
+          />
           <MapView
             ref={mapRef}
             style={styles.map}
@@ -412,7 +525,7 @@ const ActiveRideScreen = () => {
             showsMyLocationButton={false}
             showsCompass={false}
           >
-            <Marker coordinate={location} title="You">
+            <Marker coordinate={location} title="You" rotation={heading} flat={true}>
               <View style={styles.driverMarker}>
                 <LinearGradient
                   colors={[YELLOW_PRIMARY, YELLOW_SECONDARY]}
@@ -441,7 +554,7 @@ const ActiveRideScreen = () => {
               </Marker>
             )}
 
-            {rideState === 'accepted' && driverToPickupCoords.length > 0 && (
+            {(rideState === 'pending' || rideState === 'accepted') && driverToPickupCoords.length > 0 && (
               <Polyline
                 coordinates={driverToPickupCoords}
                 strokeWidth={3}
@@ -450,7 +563,7 @@ const ActiveRideScreen = () => {
               />
             )}
 
-            {(rideState === 'accepted' || rideState === 'arrived') && pickupToDropoffCoords.length > 0 && (
+            {(rideState === 'pending' || rideState === 'accepted' || rideState === 'arrived') && pickupToDropoffCoords.length > 0 && (
               <Polyline
                 coordinates={pickupToDropoffCoords}
                 strokeWidth={3}

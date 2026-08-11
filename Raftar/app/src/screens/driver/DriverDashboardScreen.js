@@ -26,7 +26,7 @@ import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import api from '../../services/api';
-import { toggleOnlineStatus, getDriverStats, getDriverProfile } from '../../redux/slices/driverSlice';
+import { toggleOnlineStatus, getDriverStats, getDriverProfile, getRideRequests } from '../../redux/slices/driverSlice';
 import { useSocket } from '../../context/SocketContext';
 
 const { width, height } = Dimensions.get('window');
@@ -49,14 +49,13 @@ const DriverDashboardScreen = () => {
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  const { driver, stats, loading } = useSelector(state => state.driver);
+  const { driver, stats, loading, rideRequests = [] } = useSelector(state => state.driver);
   const { user } = useSelector(state => state.auth);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [recentRides, setRecentRides] = useState([]);
   const [earnings, setEarnings] = useState(null);
   const [activeRide, setActiveRide] = useState(null);
-  const [rideRequests, setRideRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
@@ -66,14 +65,14 @@ const DriverDashboardScreen = () => {
   useEffect(() => {
     fetchDriverStats();
     getLocation();
-    fetchRideRequests();
+    dispatch(getRideRequests());
   }, []);
 
   useFocusEffect(
     React.useCallback(() => {
       fetchRecentRides();
       checkActiveRide();
-      fetchRideRequests();
+      dispatch(getRideRequests());
     }, [])
   );
 
@@ -92,52 +91,6 @@ const DriverDashboardScreen = () => {
     }
   };
 
-  const fetchRideRequests = async () => {
-    try {
-      // Simulated ride requests near driver location
-      const mockRequests = [
-        {
-          id: '1',
-          passengerName: 'Sarah Johnson',
-          rating: 4.8,
-          pickup: { latitude: 37.78825, longitude: -122.4324 },
-          dropoff: { latitude: 37.7749, longitude: -122.4194 },
-          distance: '2.3 km',
-          fare: 'Rs. 450',
-          time: '5 min ago',
-          status: 'pending',
-          passengerImage: 'https://randomuser.me/api/portraits/women/1.jpg',
-        },
-        {
-          id: '2',
-          passengerName: 'Michael Chen',
-          rating: 4.9,
-          pickup: { latitude: 37.7749, longitude: -122.4194 },
-          dropoff: { latitude: 37.7833, longitude: -122.4167 },
-          distance: '1.8 km',
-          fare: 'Rs. 380',
-          time: '10 min ago',
-          status: 'pending',
-          passengerImage: 'https://randomuser.me/api/portraits/men/2.jpg',
-        },
-        {
-          id: '3',
-          passengerName: 'Emily Rodriguez',
-          rating: 4.7,
-          pickup: { latitude: 37.7833, longitude: -122.4167 },
-          dropoff: { latitude: 37.7933, longitude: -122.4267 },
-          distance: '3.1 km',
-          fare: 'Rs. 520',
-          time: '15 min ago',
-          status: 'pending',
-          passengerImage: 'https://randomuser.me/api/portraits/women/3.jpg',
-        },
-      ];
-      setRideRequests(mockRequests);
-    } catch (error) {
-      console.log('Error fetching ride requests:', error);
-    }
-  };
 
   const checkActiveRide = async () => {
     try {
@@ -269,7 +222,12 @@ const DriverDashboardScreen = () => {
             const loc = await Location.getCurrentPositionAsync({});
             await api.post('/rides/location', {
               location: { coordinates: [loc.coords.longitude, loc.coords.latitude] }
-            }).catch(() => {});
+            }).catch((err) => {
+              if (err.response?.status === 404) {
+                if (window.locationInterval) clearInterval(window.locationInterval);
+                dispatch(toggleOnlineStatus(false));
+              }
+            });
           }, 10000);
         } else {
           if (window.locationInterval) clearInterval(window.locationInterval);
@@ -289,7 +247,7 @@ const DriverDashboardScreen = () => {
     await fetchDriverStats();
     await fetchRecentRides();
     await checkActiveRide();
-    await fetchRideRequests();
+    await dispatch(getRideRequests());
     setRefreshing(false);
   };
 

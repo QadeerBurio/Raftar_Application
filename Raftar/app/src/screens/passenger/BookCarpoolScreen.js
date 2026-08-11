@@ -38,6 +38,7 @@ import { getDirections } from '../../services/maps';
 import api from '../../services/api';
 import socketService from '../../services/socket';
 import CarpoolMapPreview from '../../components/common/CarpoolMapPreview';
+import { VEHICLE_TYPES } from '../../utils/constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -54,8 +55,22 @@ const BookCarpoolScreen = () => {
   
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
+  const [selectedVehicle, setSelectedVehicle] = useState('car');
   const [searching, setSearching] = useState(false);
   const [selectedCarpool, setSelectedCarpool] = useState(null);
+  const [vehicleFares, setVehicleFares] = useState({});
+
+  const vehicleTypes = VEHICLE_TYPES.filter(v => ['car', 'ac_car', 'luxury_car'].includes(v.id));
+
+  const getIcon = (icon, iconType, size, color) => {
+    switch (iconType) {
+      case 'material': return <Icon name={icon} size={size} color={color} />;
+      case 'material-community': return <IconMC name={icon} size={size} color={color} />;
+      case 'fontawesome': return <IconFA name={icon} size={size} color={color} />;
+      case 'feather': return <Icon name={icon} size={size} color={color} />; // fallback
+      default: return <Icon name={icon} size={size} color={color} />;
+    }
+  };
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCarpools, setShowCarpools] = useState(false);
   
@@ -81,7 +96,7 @@ const BookCarpoolScreen = () => {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   // New state for carpool lists
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'create'
+  const [viewMode, setViewMode] = useState(route.params?.directCreate ? 'create' : 'list'); // 'list' or 'create'
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'accepted'
   const [pendingRequests, setPendingRequests] = useState([]);
   const [acceptedCarpools, setAcceptedCarpools] = useState([]);
@@ -121,8 +136,33 @@ const BookCarpoolScreen = () => {
     };
   }, []);
 
+  const calculateFare = async () => {
+    if (!pickup || !dropoff) return;
+    try {
+      const fares = {};
+      await Promise.all(vehicleTypes.map(async (v) => {
+        const response = await api.post('/pricing/calculate', {
+          pickup: pickup.location.coordinates ? { lng: pickup.location.coordinates[0], lat: pickup.location.coordinates[1] } : pickup.location,
+          dropoff: dropoff.location.coordinates ? { lng: dropoff.location.coordinates[0], lat: dropoff.location.coordinates[1] } : dropoff.location,
+          vehicle: v.id,
+          city: 'Karachi', // defaulting city
+          isCarpool: true,
+          isIntercity: isIntercity,
+          passengers: 1,
+          driversAvailable: 5,
+          hour: schedule ? schedule.getHours() : new Date().getHours()
+        });
+        fares[v.id] = response.data.fare ?? 0;
+      }));
+      setVehicleFares(fares);
+    } catch (error) {
+      console.error('Error calculating fare:', error);
+    }
+  };
+
   useEffect(() => {
     if (pickup && dropoff) {
+      calculateFare();
       fetchRoute();
       searchCarpools();
     } else {
@@ -266,6 +306,7 @@ const BookCarpoolScreen = () => {
       await dispatch(getAvailableCarpools({
         pickup: JSON.stringify(pickup.location.coordinates),
         dropoff: JSON.stringify(dropoff.location.coordinates),
+        vehicleType: selectedVehicle,
         isIntercity
       }));
       setShowCarpools(true);
@@ -296,13 +337,18 @@ const BookCarpoolScreen = () => {
           start: schedule,
           end: new Date(schedule.getTime() + 60 * 60 * 1000) // 1 hour window
         },
+        vehicleType: selectedVehicle,
         isIntercity
       })).unwrap();
 
       Alert.alert('Success', 'Carpool request posted!', [
         { text: 'OK', onPress: () => {
-          setViewMode('list');
-          fetchMyCarpools();
+          if (route.params?.directCreate) {
+            navigation.goBack();
+          } else {
+            setViewMode('list');
+            fetchMyCarpools();
+          }
         }}
       ]);
     } catch (error) {
@@ -687,7 +733,7 @@ const BookCarpoolScreen = () => {
             <View style={styles.createHeader}>
               <TouchableOpacity 
                 style={styles.backButton}
-                onPress={() => setViewMode('list')}
+                onPress={() => route.params?.directCreate ? navigation.goBack() : setViewMode('list')}
               >
                 <Icon name="arrow-back" size={24} color={colors.text} />
               </TouchableOpacity>
@@ -776,7 +822,7 @@ const BookCarpoolScreen = () => {
                   </TouchableOpacity>
                 </View>
                 
-                <View style={styles.locationInputWrapper}>
+                <View style={[styles.locationInputWrapper, { zIndex: 2 }]}>
                   <View style={styles.locationDot}>
                     <View style={[styles.dot, { backgroundColor: '#4ECDC4' }]} />
                     <View style={styles.dotLine} />
@@ -818,7 +864,7 @@ const BookCarpoolScreen = () => {
 
                 <View style={styles.locationDivider} />
 
-                <View style={styles.locationInputWrapper}>
+                <View style={[styles.locationInputWrapper, { zIndex: 1 }]}>
                   <View style={styles.locationDot}>
                     <View style={[styles.dot, { backgroundColor: '#FF6B6B' }]} />
                   </View>
@@ -959,6 +1005,53 @@ const BookCarpoolScreen = () => {
                     }}
                   />
                 )}
+              </Animatable.View>
+
+              <Animatable.View animation="fadeInUp" duration={600} delay={200} style={styles.section}>
+                <Text style={styles.sectionTitle}>Select Vehicle</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.vehicleScroll}>
+                  {vehicleTypes.map(vehicle => {
+                    const isSelected = selectedVehicle === vehicle.id;
+                    return (
+                      <TouchableOpacity 
+                        key={vehicle.id} 
+                        style={[
+                          styles.vehicleCard, 
+                          isSelected && styles.vehicleCardSelected
+                        ]} 
+                        onPress={() => setSelectedVehicle(vehicle.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[
+                          styles.vehicleIconContainer, 
+                          isSelected && styles.vehicleIconSelected,
+                          { backgroundColor: isSelected ? vehicle.color + '15' : '#f5f5f5' }
+                        ]}>
+                          {getIcon(
+                            vehicle.icon, 
+                            vehicle.iconType, 
+                            32, 
+                            isSelected ? vehicle.color : '#999'
+                          )}
+                        </View>
+                        <Text style={[
+                          styles.vehicleLabel, 
+                          isSelected && { color: vehicle.color }
+                        ]}>
+                          {vehicle.label}
+                        </Text>
+                        <Text style={[styles.vehiclePrice, isSelected && { color: vehicle.color, fontSize: 14 }]}>
+                          ₨ {vehicleFares[vehicle.id] ? Math.round(vehicleFares[vehicle.id]?.total ?? vehicleFares[vehicle.id]) : vehicle.price}
+                        </Text>
+                        {isSelected && (
+                          <View style={styles.vehicleSelectedBadge}>
+                            <Icon name="check-circle" size={20} color={colors.accent} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </Animatable.View>
 
               {/* Available Carpools */}
@@ -1600,6 +1693,62 @@ const createStyles = (colors, isDark) => {
     color: colors.text,
     fontSize: 17,
     fontWeight: '600',
+  },
+  vehicleScroll: {
+    flexDirection: 'row',
+    paddingBottom: 4,
+  },
+  vehicleCard: { 
+    width: 140, 
+    backgroundColor: cardBg, 
+    borderRadius: 16, 
+    padding: 16, 
+    marginRight: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  vehicleCardSelected: { 
+    borderColor: colors.accent,
+    borderWidth: 2,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  vehicleIconContainer: { 
+    width: 64, 
+    height: 64, 
+    borderRadius: 32, 
+    backgroundColor: '#f5f5f5', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 10,
+  },
+  vehicleIconSelected: {
+    backgroundColor: colors.accent + '15',
+  },
+  vehicleLabel: { 
+    color: '#1a1a1a', 
+    fontSize: 16, 
+    fontWeight: '700', 
+    marginBottom: 2,
+  },
+  vehiclePrice: { 
+    color: colors.textSecondary, 
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  vehicleSelectedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
   carpoolCountBadge: {
     backgroundColor: colors.accent + '15',

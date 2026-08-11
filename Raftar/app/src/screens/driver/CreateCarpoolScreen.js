@@ -25,7 +25,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomPlacesAutocomplete from '../../components/common/CustomPlacesAutocomplete';
 import { createCarpoolBooking } from '../../redux/slices/bookingSlice';
 import { GOOGLE_MAPS_API_KEY } from '../../config/constants';
 
@@ -61,11 +62,48 @@ const CreateCarpoolScreen = () => {
   const [date, setDate] = useState(new Date());
   const [time, setTime] = useState(new Date());
   const [isCreating, setIsCreating] = useState(false);
-  const [pickupText, setPickupText] = useState('');
-  const [dropoffText, setDropoffText] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const pickupRef = useRef(null);
   const dropoffRef = useRef(null);
+
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  const getCurrentLocation = async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+      
+      let loc = await Location.getCurrentPositionAsync({});
+      let addressStr = 'Current Location';
+      try {
+        let geo = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude
+        });
+        if (geo.length > 0) {
+          addressStr = `${geo[0].name || geo[0].street || ''}, ${geo[0].city || ''}`.replace(/^, /, '');
+        }
+      } catch(e) {}
+
+      setPickup({
+        address: addressStr,
+        location: {
+          type: 'Point',
+          coordinates: [loc.coords.longitude, loc.coords.latitude]
+        },
+        placeId: ''
+      });
+      pickupRef.current?.setAddressText(addressStr);
+    } catch (e) {
+      console.log('Location error', e);
+    }
+  };
 
   const handleCreateCarpool = async () => {
     if (!pickup || !dropoff) {
@@ -139,6 +177,26 @@ const CreateCarpoolScreen = () => {
     });
   };
 
+  const onChangeDate = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+  };
+
+  const onChangeTime = (event, selectedTime) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setTime(selectedTime);
+    }
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+  };
+
   const incrementSeats = () => {
     if (seats < 6) setSeats(seats + 1);
   };
@@ -197,29 +255,24 @@ const CreateCarpoolScreen = () => {
               <Text style={styles.sectionTitle}>Route Details</Text>
             </View>
             
-            <View style={styles.locationInputWrapper}>
+            <View style={[styles.locationInputWrapper, { zIndex: 2 }]}>
               <View style={styles.locationDotContainer}>
                 <View style={[styles.locationDot, styles.pickupDot]} />
                 <View style={styles.locationLine} />
               </View>
               <View style={styles.locationInputContainer}>
-                <GooglePlacesAutocomplete
+                <CustomPlacesAutocomplete
                   ref={pickupRef}
                   placeholder="Enter pickup location"
                   onPress={(data, details = null) => {
                     setPickup({
                       address: data.description,
                       location: { 
+                        type: 'Point',
                         coordinates: [details.geometry.location.lng, details.geometry.location.lat] 
                       },
                       placeId: data.place_id
                     });
-                    setPickupText(data.description);
-                  }}
-                  query={{
-                    key: GOOGLE_MAPS_API_KEY,
-                    language: 'en',
-                    components: 'country:pk',
                   }}
                   styles={{
                     textInput: styles.locationTextInput,
@@ -229,39 +282,27 @@ const CreateCarpoolScreen = () => {
                     description: styles.autocompleteDescription,
                   }}
                   placeholderTextColor={GRAY_MEDIUM}
-                  textInputProps={{
-                    placeholderTextColor: GRAY_MEDIUM,
-                    value: pickupText,
-                    onChangeText: setPickupText,
-                  }}
-                  fetchDetails={true}
-                  enablePoweredByContainer={false}
                 />
               </View>
             </View>
 
-            <View style={styles.locationInputWrapper}>
+            <View style={[styles.locationInputWrapper, { zIndex: 1 }]}>
               <View style={styles.locationDotContainer}>
                 <View style={[styles.locationDot, styles.dropoffDot]} />
               </View>
               <View style={styles.locationInputContainer}>
-                <GooglePlacesAutocomplete
+                <CustomPlacesAutocomplete
                   ref={dropoffRef}
                   placeholder="Enter destination"
                   onPress={(data, details = null) => {
                     setDropoff({
                       address: data.description,
                       location: { 
+                        type: 'Point',
                         coordinates: [details.geometry.location.lng, details.geometry.location.lat] 
                       },
                       placeId: data.place_id
                     });
-                    setDropoffText(data.description);
-                  }}
-                  query={{
-                    key: GOOGLE_MAPS_API_KEY,
-                    language: 'en',
-                    components: 'country:pk',
                   }}
                   styles={{
                     textInput: styles.locationTextInput,
@@ -271,13 +312,6 @@ const CreateCarpoolScreen = () => {
                     description: styles.autocompleteDescription,
                   }}
                   placeholderTextColor={GRAY_MEDIUM}
-                  textInputProps={{
-                    placeholderTextColor: GRAY_MEDIUM,
-                    value: dropoffText,
-                    onChangeText: setDropoffText,
-                  }}
-                  fetchDetails={true}
-                  enablePoweredByContainer={false}
                 />
               </View>
             </View>
@@ -350,8 +384,12 @@ const CreateCarpoolScreen = () => {
                 <Text style={styles.detailLabel}>Departure</Text>
               </View>
               <View style={styles.dateTimeDisplay}>
-                <Text style={styles.dateText}>{formatDate(date)}</Text>
-                <Text style={styles.timeText}>{formatTime(time)}</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+                  <Text style={styles.dateText}>{formatDate(date)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowTimePicker(true)} activeOpacity={0.7}>
+                  <Text style={styles.timeText}>{formatTime(time)}</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -420,6 +458,24 @@ const CreateCarpoolScreen = () => {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          onChange={onChangeDate}
+          minimumDate={new Date()}
+        />
+      )}
+      {showTimePicker && (
+        <DateTimePicker
+          value={time}
+          mode="time"
+          display="default"
+          onChange={onChangeTime}
+        />
+      )}
     </SafeAreaView>
   );
 };

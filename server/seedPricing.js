@@ -10,11 +10,11 @@ const PeakHour = require('./models/PeakHour');
 dotenv.config();
 
 const VEHICLE_RATES = [
-  { vehicle: 'bike', baseFare: 25, ratePerKm: 23, ratePerMin: 4, floorCost: 11 },
-  { vehicle: 'rickshaw', baseFare: 28, ratePerKm: 44, ratePerMin: 6, floorCost: 10 },
-  { vehicle: 'car', baseFare: 88, ratePerKm: 59, ratePerMin: 8, floorCost: 29 },
-  { vehicle: 'ac_car', baseFare: 88, ratePerKm: 59, ratePerMin: 8, floorCost: 45 },
-  { vehicle: 'luxury', baseFare: 150, ratePerKm: 80, ratePerMin: 10, floorCost: 66 }
+  { vehicle: 'bike', baseFare: 22, ratePerKm: 15, ratePerMin: 2.5, floorCost: 11 },
+  { vehicle: 'rickshaw', baseFare: 28, ratePerKm: 35, ratePerMin: 4.5, floorCost: 10 },
+  { vehicle: 'car', baseFare: 75, ratePerKm: 45, ratePerMin: 5.5, floorCost: 29 },
+  { vehicle: 'ac_car', baseFare: 75, ratePerKm: 45, ratePerMin: 5.5, floorCost: 45 },
+  { vehicle: 'luxury', baseFare: 110, ratePerKm: 65, ratePerMin: 8, floorCost: 66 }
 ];
 
 const CITY_TIERS = [

@@ -50,6 +50,10 @@ api.interceptors.response.use(
         // Clear token and user data
         await AsyncStorage.removeItem('token');
         await AsyncStorage.removeItem('user');
+        if (window.locationInterval) {
+          clearInterval(window.locationInterval);
+          window.locationInterval = null;
+        }
         // Navigate to login (handled in AppNavigator)
       }
     } else if (error.request) {

@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Driver = require('../models/Driver');
 const { calculateDistance, findNearbyDrivers } = require('../services/mapService');
 const { sendNotification } = require('../services/notificationService');
-const { calculateAIFare, calculateCarpoolFare, calculateCommission } = require('../services/pricingService');
+const pricingEngine = require('../services/pricingEngine');
 
 /**
  * Create a new ride
@@ -25,10 +25,24 @@ exports.createRide = async (req, res) => {
     // Calculate AI fare if not offered
     let finalFare = fare;
     if (!fare || fare.type === 'ai') {
-      const aiFare = await calculateAIFare(pickup, dropoff, vehicleType, waypoints || []);
+      const engineInput = {
+        vehicle: vehicleType || 'car',
+        city: 'Karachi', // Extract from pickup address normally
+        pickup: { lat: pickup.location.coordinates[1], lng: pickup.location.coordinates[0] },
+        dropoff: { lat: dropoff.location.coordinates[1], lng: dropoff.location.coordinates[0] },
+        stops: waypoints ? waypoints.map(w => ({ lat: w.location.coordinates[1], lng: w.location.coordinates[0] })) : [],
+        isIntercity: type === 'intercity',
+        isCarpool: !!carpool,
+        passengers: carpool?.seats || 1,
+        driversAvailable: 5, // mock or get actual
+        hour: new Date().getHours()
+      };
+      
+      const newFare = await pricingEngine.calculateFare(engineInput);
+      
       finalFare = {
         offered: null,
-        accepted: aiFare.total,
+        accepted: newFare.fare,
         type: 'ai'
       };
     }
@@ -101,25 +115,29 @@ exports.createRide = async (req, res) => {
  */
 exports.calculateFare = async (req, res) => {
   try {
-    const { pickup, dropoff, waypoints, vehicleType, seats } = req.body;
+    const { pickup, dropoff, waypoints, vehicleType, seats, type } = req.body;
 
-    // Calculate fare
-    const fare = await calculateAIFare(pickup, dropoff, vehicleType, waypoints || []);
+    const engineInput = {
+      vehicle: vehicleType || 'car',
+      city: 'Karachi', 
+      pickup: pickup.coordinates ? { lat: pickup.coordinates[1], lng: pickup.coordinates[0] } : pickup,
+      dropoff: dropoff.coordinates ? { lat: dropoff.coordinates[1], lng: dropoff.coordinates[0] } : dropoff,
+      stops: waypoints ? waypoints.map(w => w.coordinates ? { lat: w.coordinates[1], lng: w.coordinates[0] } : w) : [],
+      isIntercity: type === 'intercity',
+      isCarpool: seats && seats > 1,
+      passengers: seats || 1,
+      driversAvailable: 5,
+      hour: new Date().getHours()
+    };
 
-    // If carpool, calculate per seat fare
-    if (seats && seats > 1) {
-      const carpoolFare = calculateCarpoolFare(fare.total, seats, 1);
-      fare.carpool = carpoolFare;
-    }
-
-    // Calculate commission
-    const commission = calculateCommission(fare.total, 'solo');
+    const newFare = await pricingEngine.calculateFare(engineInput);
 
     res.json({
       success: true,
       fare: {
-        ...fare,
-        commission
+        total: newFare.fare,
+        commission: newFare.platformCommission,
+        ...newFare
       }
     });
   } catch (error) {

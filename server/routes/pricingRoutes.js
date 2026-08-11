@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pricingEngine = require('../services/pricingEngine');
-const { protect, admin } = require('../middleware/auth'); // Check actual auth middleware imports
+const auth = require('../middleware/auth');
+const { isAdmin } = require('../middleware/roleCheck');
 const PricingConfig = require('../models/PricingConfig');
 const CityTier = require('../models/CityTier');
 const IntercityRate = require('../models/IntercityRate');
@@ -9,7 +10,7 @@ const SurgeConfig = require('../models/SurgeConfig');
 const PeakHour = require('../models/PeakHour');
 
 // POST /api/pricing/calculate - full fare with all inputs
-router.post('/calculate', protect, async (req, res) => {
+router.post('/calculate', auth, async (req, res) => {
   try {
     const fareDetails = await pricingEngine.calculateFare(req.body);
     res.json(fareDetails);
@@ -20,7 +21,7 @@ router.post('/calculate', protect, async (req, res) => {
 });
 
 // POST /api/pricing/estimate - pre-booking estimate
-router.post('/estimate', protect, async (req, res) => {
+router.post('/estimate', auth, async (req, res) => {
   try {
     // For estimate, we don't have driver location, driverId, waitMinutes, etc.
     const input = {
@@ -57,43 +58,51 @@ router.get('/config', async (req, res) => {
 });
 
 // PUT /api/pricing/config - update rates (admin only)
-router.put('/config', protect, admin, async (req, res) => {
+router.put('/config', auth, isAdmin, async (req, res) => {
   try {
     const { type, data } = req.body;
+    const docId = data._id || data.id;
     
     // Type can be vehicleRates, cityTiers, intercityRates, surgeConfig, peakHours
     switch (type) {
       case 'vehicleRates':
-        if (data.id) {
-          await PricingConfig.findByIdAndUpdate(data.id, data);
+        const vehicleData = {
+          vehicle: data.vehicle,
+          baseFare: data.base !== undefined ? data.base : data.baseFare,
+          ratePerKm: data.ratePerKm,
+          ratePerMin: data.ratePerMin,
+          floorCost: data.floor !== undefined ? data.floor : data.floorCost
+        };
+        if (docId) {
+          await PricingConfig.findByIdAndUpdate(docId, vehicleData);
         } else {
-          await PricingConfig.findOneAndUpdate({ vehicle: data.vehicle }, data, { upsert: true });
+          await PricingConfig.findOneAndUpdate({ vehicle: data.vehicle }, vehicleData, { upsert: true });
         }
         break;
       case 'cityTiers':
-        if (data.id) {
-          await CityTier.findByIdAndUpdate(data.id, data);
+        if (docId) {
+          await CityTier.findByIdAndUpdate(docId, data);
         } else {
           await CityTier.findOneAndUpdate({ city: data.city }, data, { upsert: true });
         }
         break;
       case 'intercityRates':
-        if (data.id) {
-          await IntercityRate.findByIdAndUpdate(data.id, data);
+        if (docId) {
+          await IntercityRate.findByIdAndUpdate(docId, data);
         } else {
           await new IntercityRate(data).save();
         }
         break;
       case 'surgeConfig':
-        if (data.id) {
-          await SurgeConfig.findByIdAndUpdate(data.id, data);
+        if (docId) {
+          await SurgeConfig.findByIdAndUpdate(docId, data);
         } else {
           await new SurgeConfig(data).save();
         }
         break;
       case 'peakHours':
-        if (data.id) {
-          await PeakHour.findByIdAndUpdate(data.id, data);
+        if (docId) {
+          await PeakHour.findByIdAndUpdate(docId, data);
         } else {
           await new PeakHour(data).save();
         }

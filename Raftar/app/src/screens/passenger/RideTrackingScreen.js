@@ -57,6 +57,7 @@ const RideTrackingScreen = () => {
   const isShared = !!currentRide?.shareToken || isLocallyShared;
   const [loadingShare, setLoadingShare] = useState(false);
   const passengerLocationInterval = useRef(null);
+  const [showDriverArrivedPopup, setShowDriverArrivedPopup] = useState(false);
 
   useEffect(() => {
     if (VOIP_CALLING_ENABLED && socket) {
@@ -280,6 +281,7 @@ const RideTrackingScreen = () => {
 
     const handleRideUpdate = (data) => {
       console.log('[RideTrackingScreen] Received ride-update event');
+      dispatch(getRideDetails(rideId));
     };
 
     const handleRideCancelled = (data) => {
@@ -302,6 +304,10 @@ const RideTrackingScreen = () => {
       }
     };
 
+    const handleDriverArrived = (data) => {
+      setShowDriverArrivedPopup(true);
+    };
+
     socket.on('driver-location', handleDriverLocation);
     socket.on('new-message', handleNewMessage);
     socket.on('ride-completed', handleRideCompleted);
@@ -310,6 +316,7 @@ const RideTrackingScreen = () => {
     socket.on('ride-update', handleRideUpdate);
     socket.on('ride-cancelled', handleRideCancelled);
     socket.on('nearby-drivers', handleNearbyDrivers);
+    socket.on('driver-arrived', handleDriverArrived);
 
     return () => {
       socket.off('driver-location', handleDriverLocation);
@@ -320,8 +327,16 @@ const RideTrackingScreen = () => {
       socket.off('ride-update', handleRideUpdate);
       socket.off('ride-cancelled', handleRideCancelled);
       socket.off('nearby-drivers', handleNearbyDrivers);
+      socket.off('driver-arrived', handleDriverArrived);
     };
   }, [socket, rideId, dispatch]);
+
+  const handlePassengerComing = () => {
+    setShowDriverArrivedPopup(false);
+    if (socket) {
+      socket.emit('passenger-coming', { rideId });
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
@@ -424,7 +439,7 @@ const RideTrackingScreen = () => {
     );
   };
 
-  if (loading) {
+  if (loading && !currentRide) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#f9c043" />
@@ -508,6 +523,8 @@ const RideTrackingScreen = () => {
               longitude: driverLocation.coordinates[0],
             }}
             anchor={{ x: 0.5, y: 0.5 }}
+            rotation={driverLocation.heading || 0}
+            flat={true}
             zIndex={100}
             tracksViewChanges={false}
           >
@@ -769,13 +786,14 @@ const RideTrackingScreen = () => {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.cancelButton, currentRide?.status === 'completed' && styles.disabledButton]}
-          onPress={handleCancelRide}
-          disabled={currentRide?.status === 'completed'}
-        >
-          <Text style={styles.cancelButtonText}>Cancel Ride</Text>
-        </TouchableOpacity>
+        {currentRide?.status !== 'started' && currentRide?.status !== 'in_progress' && currentRide?.status !== 'completed' && (
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleCancelRide}
+          >
+            <Text style={styles.cancelButtonText}>Cancel Ride</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Chat Modal */}
@@ -833,6 +851,29 @@ const RideTrackingScreen = () => {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Driver Arrived Modal */}
+      <Modal
+        visible={showDriverArrivedPopup}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: '85%', backgroundColor: isDark ? colors.card : '#FFFFFF', borderRadius: 20, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8Faf5', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+              <Icon name="directions-car" size={40} color="#4ECDC4" />
+            </View>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: colors.text || '#000', marginBottom: 12, textAlign: 'center' }}>Driver Arrived!</Text>
+            <Text style={{ fontSize: 16, color: colors.textSecondary || '#666', textAlign: 'center', marginBottom: 28, lineHeight: 24 }}>Your driver is waiting for you at the pickup location.</Text>
+            <TouchableOpacity 
+              style={{ width: '100%', backgroundColor: '#f9c043', paddingVertical: 16, borderRadius: 12, alignItems: 'center', shadowColor: '#f9c043', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}
+              onPress={handlePassengerComing}
+            >
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#15212D' }}>I'm Coming</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
     </View>

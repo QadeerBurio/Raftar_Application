@@ -24,12 +24,13 @@ import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import IconIonic from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import Button from '../../components/common/Button';
 import { getRideRequests, acceptRide, counterOffer, removeRideRequest } from '../../redux/slices/driverSlice';
 import { getVehicleType } from '../../utils/constants';
 import { useSocket } from '../../context/SocketContext';
 import api from '../../services/api';
+import { getDirections } from '../../services/maps';
 
 const { width } = Dimensions.get('window');
 
@@ -58,6 +59,7 @@ const RideRequestScreen = () => {
   const [counterAmount, setCounterAmount] = useState('');
   const [activeRide, setActiveRide] = useState(null);
   const [expandedCard, setExpandedCard] = useState(null);
+  const [routePolylines, setRoutePolylines] = useState({});
 
   const socket = useSocket();
 
@@ -89,6 +91,33 @@ const RideRequestScreen = () => {
       };
     }
   }, [socket]);
+
+  useEffect(() => {
+    const fetchPolylines = async () => {
+      if (!rideRequests || rideRequests.length === 0) return;
+      const newPolylines = { ...routePolylines };
+      let updated = false;
+      
+      for (const ride of rideRequests) {
+        if (!newPolylines[ride._id] && ride.pickup && ride.dropoff) {
+          try {
+            const res = await getDirections(ride.pickup, ride.dropoff, ride.waypoints || []);
+            if (res && res.coordinates) {
+              newPolylines[ride._id] = res.coordinates;
+              updated = true;
+            }
+          } catch (err) {
+            console.log('Error fetching polyline for request', ride._id);
+          }
+        }
+      }
+      
+      if (updated) {
+        setRoutePolylines(newPolylines);
+      }
+    };
+    fetchPolylines();
+  }, [rideRequests]);
 
   const checkActiveRide = async () => {
     try {
@@ -302,45 +331,52 @@ const RideRequestScreen = () => {
             </View>
           </View>
 
+            <View style={styles.mapContainer}>
+              <MapView
+                style={styles.map}
+                provider={PROVIDER_GOOGLE}
+                initialRegion={{
+                  latitude: item.pickup?.location?.coordinates?.[1] || item.pickup?.coordinates?.[1] || 37.78825,
+                  longitude: item.pickup?.location?.coordinates?.[0] || item.pickup?.coordinates?.[0] || -122.4324,
+                  latitudeDelta: 0.02,
+                  longitudeDelta: 0.02,
+                }}
+                scrollEnabled={true}
+                zoomEnabled={true}
+              >
+                {routePolylines[item._id] && routePolylines[item._id].length > 0 && (
+                  <Polyline
+                    coordinates={routePolylines[item._id]}
+                    strokeColor="#4A90E2"
+                    strokeWidth={4}
+                  />
+                )}
+                <Marker
+                  coordinate={{
+                    latitude: item.pickup?.location?.coordinates?.[1] || item.pickup?.coordinates?.[1] || 37.78825,
+                    longitude: item.pickup?.location?.coordinates?.[0] || item.pickup?.coordinates?.[0] || -122.4324,
+                  }}
+                >
+                  <View style={styles.mapMarkerGreen}>
+                    <Icon name="my-location" size={12} color={WHITE} />
+                  </View>
+                </Marker>
+                <Marker
+                  coordinate={{
+                    latitude: item.dropoff?.location?.coordinates?.[1] || item.dropoff?.coordinates?.[1] || 37.7749,
+                    longitude: item.dropoff?.location?.coordinates?.[0] || item.dropoff?.coordinates?.[0] || -122.4194,
+                  }}
+                >
+                  <View style={styles.mapMarkerRed}>
+                    <Icon name="location-on" size={12} color={WHITE} />
+                  </View>
+                </Marker>
+              </MapView>
+            </View>
+
           {isExpanded && (
             <Animatable.View animation="fadeIn" duration={300}>
               <View style={styles.expandedContent}>
-                <View style={styles.mapContainer}>
-                  <MapView
-                    style={styles.map}
-                    provider={PROVIDER_GOOGLE}
-                    initialRegion={{
-                      latitude: item.pickup?.coordinates?.[1] || 37.78825,
-                      longitude: item.pickup?.coordinates?.[0] || -122.4324,
-                      latitudeDelta: 0.02,
-                      longitudeDelta: 0.02,
-                    }}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                  >
-                    <Marker
-                      coordinate={{
-                        latitude: item.pickup?.coordinates?.[1] || 37.78825,
-                        longitude: item.pickup?.coordinates?.[0] || -122.4324,
-                      }}
-                    >
-                      <View style={styles.mapMarkerGreen}>
-                        <Icon name="my-location" size={12} color={WHITE} />
-                      </View>
-                    </Marker>
-                    <Marker
-                      coordinate={{
-                        latitude: item.dropoff?.coordinates?.[1] || 37.7749,
-                        longitude: item.dropoff?.coordinates?.[0] || -122.4194,
-                      }}
-                    >
-                      <View style={styles.mapMarkerRed}>
-                        <Icon name="location-on" size={12} color={WHITE} />
-                      </View>
-                    </Marker>
-                  </MapView>
-                </View>
-
                 <View style={styles.rideDetailsGrid}>
                   <View style={styles.detailItem}>
                     <IconMC name="car-sports" size={20} color={YELLOW_PRIMARY} />

@@ -201,8 +201,41 @@ const ManageCarpoolsScreen = () => {
             </View>
           </View>
         </View>
+
+        {passenger.pickup && passenger.dropoff && (
+          <View style={{ marginTop: 12 }}>
+            <View style={styles.routeContainer}>
+              <View style={styles.routePoint}>
+                <View style={styles.routeIconGreen}>
+                  <Icon name="my-location" size={12} color={WHITE} />
+                </View>
+                <Text style={styles.routeText} numberOfLines={1}>
+                  {passenger.pickup?.address || 'Pickup location'}
+                </Text>
+              </View>
+              <View style={styles.routeConnector}>
+                <View style={styles.routeLine} />
+                <View style={styles.routeDot} />
+              </View>
+              <View style={styles.routePoint}>
+                <View style={styles.routeIconRed}>
+                  <Icon name="location-on" size={12} color={WHITE} />
+                </View>
+                <Text style={styles.routeText} numberOfLines={1}>
+                  {passenger.dropoff?.address || 'Dropoff location'}
+                </Text>
+              </View>
+            </View>
+            <CarpoolMapPreview 
+              pickup={passenger.pickup} 
+              dropoff={passenger.dropoff} 
+              style={[styles.mapPreview, { height: 100, marginTop: 8 }]} 
+            />
+          </View>
+        )}
+
         {passenger.status === 'pending' && (
-          <View style={styles.actionButtons}>
+          <View style={[styles.actionButtons, { marginTop: 16 }]}>
             <TouchableOpacity 
               style={[styles.actionBtn, styles.acceptActionBtn]} 
               onPress={() => handleAccept(carpoolId, user._id)}
@@ -375,7 +408,7 @@ const ManageCarpoolsScreen = () => {
                 <Text style={styles.actionButtonText}>Accept Request</Text>
               </LinearGradient>
             </TouchableOpacity>
-          ) : (item.status === 'available' || item.status === 'full' || item.status === 'accepted') && !isRequest ? (
+          ) : (item.status === 'available' || item.status === 'full' || item.status === 'accepted' || item.status === 'confirmed') ? (
             <TouchableOpacity 
               style={styles.actionButton} 
               onPress={() => handleStart(item._id)}
@@ -479,10 +512,10 @@ const ManageCarpoolsScreen = () => {
                 <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextActive]}>
                   Pending
                 </Text>
-                {pendingRequests.length > 0 && (
+                {(pendingRequests.length + acceptedCarpools.filter(c => !c.passengerId && c.carpool?.passengers?.some(p => p.status === 'pending')).length) > 0 && (
                   <View style={[styles.tabBadge, activeTab === 'pending' && styles.tabBadgeActive]}>
                     <Text style={[styles.tabBadgeText, activeTab === 'pending' && styles.tabBadgeTextActive]}>
-                      {pendingRequests.length}
+                      {pendingRequests.length + acceptedCarpools.filter(c => !c.passengerId && c.carpool?.passengers?.some(p => p.status === 'pending')).length}
                     </Text>
                   </View>
                 )}
@@ -512,10 +545,10 @@ const ManageCarpoolsScreen = () => {
                 <Text style={[styles.tabText, activeTab === 'accepted' && styles.tabTextActive]}>
                   Accepted
                 </Text>
-                {acceptedCarpools.length > 0 && (
+                {acceptedCarpools.filter(c => c.passengerId || !c.carpool?.passengers?.some(p => p.status === 'pending')).length > 0 && (
                   <View style={[styles.tabBadge, activeTab === 'accepted' && styles.tabBadgeActive]}>
                     <Text style={[styles.tabBadgeText, activeTab === 'accepted' && styles.tabBadgeTextActive]}>
-                      {acceptedCarpools.length}
+                      {acceptedCarpools.filter(c => c.passengerId || !c.carpool?.passengers?.some(p => p.status === 'pending')).length}
                     </Text>
                   </View>
                 )}
@@ -525,7 +558,9 @@ const ManageCarpoolsScreen = () => {
         </View>
 
         <FlatList
-          data={activeTab === 'pending' ? pendingRequests : acceptedCarpools}
+          data={activeTab === 'pending' 
+            ? [...pendingRequests, ...acceptedCarpools.filter(c => !c.passengerId && c.carpool?.passengers?.some(p => p.status === 'pending'))] 
+            : acceptedCarpools.filter(c => c.passengerId || !c.carpool?.passengers?.some(p => p.status === 'pending'))}
           renderItem={renderCarpool}
           keyExtractor={item => item._id}
           contentContainerStyle={styles.list}

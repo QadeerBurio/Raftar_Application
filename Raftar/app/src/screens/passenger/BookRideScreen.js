@@ -1253,7 +1253,6 @@ const createStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: 'transparent',
   },
   autocompleteContainer: {
-    flex: 1,
     zIndex: 999,
   },
   autocompleteList: {

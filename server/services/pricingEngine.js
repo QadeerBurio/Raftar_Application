@@ -128,16 +128,6 @@ async function getDeadheadDistance(driverLat, driverLng, pickupLat, pickupLng) {
   return { distance: 2.5, time: 5 };
 }
 
-function calculateDetourPercent(directDistance, actualDistance) {
-  if (directDistance === 0) return 0;
-  return ((actualDistance - directDistance) / directDistance) * 100;
-}
-
-function getDetourFee(detourPercent) {
-  if (detourPercent <= 15) return 0;
-  if (detourPercent <= 40) return Math.min(detourPercent * 1.2, 50);
-  return 0; // 40%+ = separate trips
-}
 
 function calculateWaitFee(waitMinutes) {
   if (waitMinutes <= 3) return 0;
@@ -163,28 +153,29 @@ async function getDriverCommission(driverId) {
   }
 }
 
-async function getGoogleMapsData(pickup, dropoff) {
+async function getGoogleMapsDirect(pickup, dropoff) {
   // Mock Google Maps API call. Should be replaced with actual Google Maps API logic in production.
-  // We'll calculate straight-line distance roughly and time roughly.
-  const distance = Math.sqrt(Math.pow(pickup.lat - dropoff.lat, 2) + Math.pow(pickup.lng - dropoff.lng, 2)) * 111; // rough km
-  const time = distance * 2.5; // rough mins
-  
-  return {
-    distance: Math.max(distance, 1),
-    time: Math.max(time, 1)
-  };
+  const distance = Math.sqrt(Math.pow(pickup.lat - dropoff.lat, 2) + Math.pow(pickup.lng - dropoff.lng, 2)) * 111;
+  const time = distance * 2.5;
+  return { distance: Math.max(distance, 1), time: Math.max(time, 1) };
 }
 
-function getActualDistance(pickup, stops, dropoff) {
-  // Mock distance for multi-stop
+async function getGoogleMapsWithWaypoints(pickup, waypointsStr, dropoff) {
+  // Mock Google Maps API call with waypoints
   let distance = 0;
   let current = pickup;
-  const allStops = [...(stops || []), dropoff];
+  const stops = waypointsStr.split('|').map(s => {
+    const parts = s.split(',');
+    return { lat: parseFloat(parts[0]), lng: parseFloat(parts[1]) };
+  });
+  
+  const allStops = [...stops, dropoff];
   for (const stop of allStops) {
     distance += Math.sqrt(Math.pow(current.lat - stop.lat, 2) + Math.pow(current.lng - stop.lng, 2)) * 111;
     current = stop;
   }
-  return distance;
+  const time = distance * 2.5;
+  return { distance: Math.max(distance, 1), time: Math.max(time, 1) };
 }
 
 /**
@@ -197,15 +188,26 @@ async function calculateFare(input) {
     await loadConfig();
   }
 
-  // Use fallback if not in DB
-  const rates = configCache.vehicleRates[input.vehicle] || { base: 88, ratePerKm: 59, ratePerMin: 8, floor: 29 };
+  const fallbackRates = {
+    bike: { base: 22, ratePerKm: 15, ratePerMin: 2.5, floor: 11 },
+    rickshaw: { base: 28, ratePerKm: 35, ratePerMin: 4.5, floor: 10 },
+    car: { base: 75, ratePerKm: 45, ratePerMin: 5.5, floor: 29 },
+    ac_car: { base: 75, ratePerKm: 45, ratePerMin: 5.5, floor: 45 },
+    luxury: { base: 110, ratePerKm: 65, ratePerMin: 8, floor: 66 }
+  };
+  const rates = configCache.vehicleRates[input.vehicle] || fallbackRates[input.vehicle] || fallbackRates.car;
   
   // === STEP 1: Get Google Maps Data ===
-  let tripData;
+  let routeData;
   if (input.estimatedDistance && input.estimatedTime) {
-      tripData = { distance: input.estimatedDistance, time: input.estimatedTime };
+      routeData = { distance: input.estimatedDistance, time: input.estimatedTime };
+  } else if (input.stops && input.stops.length > 0) {
+      // Build waypoints string
+      const waypoints = input.stops.map(s => `${s.lat},${s.lng}`).join('|');
+      // Call Google Maps with waypoints
+      routeData = await getGoogleMapsWithWaypoints(input.pickup, waypoints, input.dropoff);
   } else {
-      tripData = await getGoogleMapsData(input.pickup, input.dropoff);
+      routeData = await getGoogleMapsDirect(input.pickup, input.dropoff);
   }
   
   let deadhead = { distance: 0, time: 0 };
@@ -213,18 +215,9 @@ async function calculateFare(input) {
     deadhead = await getDeadheadDistance(input.driverLocation.lat, input.driverLocation.lng, input.pickup.lat, input.pickup.lng);
   }
 
-  const totalDistance = tripData.distance + deadhead.distance;
-  const totalTime = tripData.time + deadhead.time;
-  
-  // === STEP 2: Detour % for Multi-Stop ===
-  let detourPercent = 0;
-  let detourFee = 0;
-  if (input.stops && input.stops.length > 0) {
-    const actualDistance = getActualDistance(input.pickup, input.stops, input.dropoff);
-    const directDistance = tripData.distance;
-    detourPercent = calculateDetourPercent(directDistance, actualDistance);
-    detourFee = getDetourFee(detourPercent);
-  }
+  const totalDistance = routeData.distance + deadhead.distance;
+  const totalTime = routeData.time + deadhead.time;
+
   
   // === STEP 3: Base Fare ===
   let subtotal = 
@@ -249,8 +242,7 @@ async function calculateFare(input) {
   const acPremium = input.vehicle === 'ac_car' ? getACPremium(totalDistance) : 0;
   subtotal += acPremium;
   
-  // === STEP 6: Detour Fee ===
-  subtotal += detourFee;
+
   
   // === STEP 7: Wait Time Fee ===
   const waitFee = calculateWaitFee(input.waitMinutes || 0);
@@ -293,8 +285,7 @@ async function calculateFare(input) {
       timeCost: totalTime * rates.ratePerMin,
       deadheadDistance: deadhead.distance,
       deadheadTime: deadhead.time,
-      detourPercent: detourPercent,
-      detourFee: detourFee,
+
       waitFee: waitFee,
       cityTier: cityTierMultiplier,
       peakMultiplier: peakMultiplier,

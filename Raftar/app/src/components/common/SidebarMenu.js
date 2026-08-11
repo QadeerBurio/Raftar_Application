@@ -93,6 +93,10 @@ const SidebarMenu = ({ visible, onClose }) => {
             text: 'Logout',
             style: 'destructive',
             onPress: async () => {
+              if (window.locationInterval) {
+                clearInterval(window.locationInterval);
+                window.locationInterval = null;
+              }
               await dispatch(logout());
               navigation.reset({
                 index: 0,

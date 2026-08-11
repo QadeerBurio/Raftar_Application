@@ -78,11 +78,24 @@ exports.getAvailableCarpools = async (req, res) => {
         pickupLat = pickup.lat;
     }
 
-    const carpools = await Booking.find({
+    const userId = req.user ? req.user.id : null;
+
+    const query = {
       type: 'carpool',
       isIntercity: isIntercity === 'true',
-      status: 'available',
+      status: { $in: ['available', 'searching'] },
       'carpool.seatsAvailable': { $gt: 0 },
+    };
+
+    if (userId) {
+      query.$or = [
+        { passengerId: { $ne: userId } },
+        { passengerId: { $exists: false } }
+      ];
+    }
+
+    const carpools = await Booking.find({
+      ...query,
       'pickup.location': {
         $near: {
           $geometry: {
@@ -413,16 +426,20 @@ exports.acceptCarpoolRequest = async (req, res) => {
     booking.status = 'confirmed'; // or 'active' / 'in-progress'
     
     if (booking.carpool && booking.carpool.passengers && booking.carpool.passengers.length > 0) {
-      booking.carpool.passengers[0].status = 'accepted';
+      booking.carpool.passengers.forEach(p => {
+        p.status = 'accepted';
+      });
     }
 
     await booking.save();
 
-    // Notify passenger
+    // Notify all passengers
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${booking.passengerId.toString()}`).emit('join-accepted', {
-        carpoolId: booking._id
+      booking.carpool.passengers.forEach(p => {
+        io.to(`user_${p.user.toString()}`).emit('join-accepted', {
+          carpoolId: booking._id
+        });
       });
     }
 
@@ -447,7 +464,7 @@ exports.joinCarpool = async (req, res) => {
       return res.status(404).json({ error: 'Carpool not found' });
     }
 
-    if (booking.status !== 'available') {
+    if (booking.status !== 'available' && booking.status !== 'searching') {
       return res.status(400).json({ error: 'This carpool is no longer available' });
     }
 
@@ -461,15 +478,21 @@ exports.joinCarpool = async (req, res) => {
       return res.status(400).json({ error: 'Already requested to join this carpool' });
     }
 
+    const isSearching = booking.status === 'searching';
+    
     booking.carpool.passengers.push({
       user: passengerId,
       pickup,
       dropoff,
-      status: 'pending'
+      status: isSearching ? 'accepted' : 'pending'
     });
+    
+    if (isSearching) {
+      booking.carpool.seatsAvailable -= 1;
+    }
+    
     await booking.save();
 
-    // Send socket notification to driver
     const io = req.app.get('io');
     if (io && booking.driverId && booking.driverId.userId) {
       io.to(`user_${booking.driverId.userId.toString()}`).emit('join-request', {
@@ -483,12 +506,22 @@ exports.joinCarpool = async (req, res) => {
           rating: req.user.rating || 4.8
         }
       });
+    } else if (io && booking.passengerId) {
+      io.to(`user_${booking.passengerId.toString()}`).emit('passenger-joined', {
+        carpoolId: booking._id,
+        passengerId,
+        passengerData: {
+          _id: req.user.id,
+          name: req.user.name,
+          rating: req.user.rating || 4.8
+        }
+      });
     }
 
     res.json({
       success: true,
       booking,
-      message: 'Join request sent to driver'
+      message: isSearching ? 'Joined carpool successfully' : 'Join request sent to driver'
     });
   } catch (error) {
     console.error('Join carpool error:', error);

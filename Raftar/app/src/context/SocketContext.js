@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { Alert } from 'react-native';
 import socketService from '../services/socket';
 
 const SocketContext = createContext();
@@ -18,6 +19,16 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     if (isAuthenticated && token && user) {
       socketService.connect(token, user.id);
+
+      const handleRideReminder = (data) => {
+        Alert.alert('Ride Reminder', data.message);
+      };
+      socketService.on('ride-reminder', handleRideReminder);
+
+      return () => {
+        socketService.off('ride-reminder', handleRideReminder);
+        socketService.disconnect();
+      };
     } else {
       socketService.disconnect();
     }

@@ -127,6 +127,14 @@ io.on('connection', (socket) => {
     io.to(`ride-${data.rideId}`).emit('passenger-location', data);
   });
 
+  socket.on('driver-arrived', (data) => {
+    io.to(`ride-${data.rideId}`).emit('driver-arrived', data);
+  });
+
+  socket.on('passenger-coming', (data) => {
+    io.to(`ride-${data.rideId}`).emit('passenger-coming', data);
+  });
+
   // VoIP WebRTC Signaling
   require('./socket/callHandler')(io, socket);
 
@@ -134,6 +142,10 @@ io.on('connection', (socket) => {
     console.log('🔴 Client disconnected:', socket.id);
   });
 });
+
+// Initialize Cron Jobs
+const startCronJobs = require('./cronJobs');
+startCronJobs(io);
 
 // Routes - IMPORTANT: Route order matters
 app.use('/api/auth', require('./routes/authRoutes'));

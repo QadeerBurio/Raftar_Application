@@ -68,7 +68,11 @@ const CarpoolExecutionScreen = () => {
         setDriverLocation(newLoc);
         await api.post('/rides/location', { 
           location: { coordinates: [newLoc.longitude, newLoc.latitude] } 
-        }).catch(() => {});
+        }).catch((err) => {
+          if (err.response?.status === 404) {
+            clearInterval(locInterval);
+          }
+        });
       }, 5000);
       
       return () => clearInterval(locInterval);

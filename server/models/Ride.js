@@ -35,6 +35,10 @@ const rideSchema = new mongoose.Schema({
   scheduledTime: {
     type: Date
   },
+  reminderSent: {
+    type: Boolean,
+    default: false
+  },
   pickup: {
     address: String,
     location: {
